@@ -130,8 +130,15 @@ What changed to make it smooth:
 - Journeys: about 30 s at Cruise, 9 s Fast, 1.6 s Warp. Arrival leads into a slow orbit.
 - Luna: the lit side grows with the song's progress (a demo timer, no Spotify connection); the ring shows journey progress.
 - Synthesised cabin sound, starting when you board.
+- Each surface has its own soundscape (ambience.js), synthesised with Web Audio, with no recordings. Layers get louder as you near their source, and some pan toward it.
+  - **Technova:** a thin, high hiss of wind; the Foundry's thrum; the mast's buzz and telemetry blips; metal ticking and clanking.
+  - **Ekatva:** leaves and grass in the wind; the river, louder as you near it and panned toward it; birds by day; insects and croaks by night; the Fort's bell; a drone from the Amphitheatre.
+  - **The Arena:** wind through the grass; crowds from the grounds; cheers, sometimes after the crack of a bat; drums from the stands; larks by day; crickets and floodlight hum at night.
+  - **Cosmos:** near silence; your breathing in the suit; the ground's low rumble; ice that sings and cracks; crystals ticking; the Observatory's servos.
+  - **The rover:** motor whine that rises with speed, wheel crunch, and splashing in water.
+  - **Sound modes:** Vacuum plays the soundscape quietly; Off silences it.
 
-- The planets orbit the star on tilted orbits (4° to 17°), each with its own year, and turn on tilted axes. Day and night on a surface come from that: you land under the vessel, so you arrive in the local time there, and the sun moves across the sky as the planet turns.
+- The planets orbit the star on tilted orbits (4° to 17°), each with its own year, and turn on tilted axes. Sunrise to sunrise takes 20 minutes on Technova, 30 on Ekatva, 40 on The Arena and 25 on Cosmos. Years run from one to two hours. Day and night on a surface come from that: you land under the vessel, so you arrive in the local time there, and the sun moves across the sky as the planet turns.
 - Planets differ in size, shape (oval Technova with a moon, flattened Arena, ringed Cosmos), gravity (0.24 g to 1.08 g), air and wind.
 - The star stands for you: granulation, spots, prominences and a corona, with an "about you" card (placeholders) while you orbit it. Too hot to land.
 - Surfaces are 12 km across, streamed around you: detailed ground near you, a coarse skirt to the horizon, grass, flowers, trees and rocks, and a large landmark on each world (the Foundry, the Amphitheatre, the Grand Arena, the Great Telescope).

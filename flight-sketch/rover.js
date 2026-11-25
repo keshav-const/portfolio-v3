@@ -154,8 +154,8 @@ export function createRoverSim(env) {
   }
   function collide() {
     const c = Math.cos(s.yaw), sn = Math.sin(s.yaw);
-    for (const lz of [-1.25, 1.25]) { // the body as two circles, front and back
-      const cx = s.pos.x + lz * sn, cz = s.pos.z + lz * c, R = 1.25;
+    for (const lz of [-1.5, 0, 1.5]) { // the body as three circles, nose to tail, as wide as the wheels
+      const cx = s.pos.x + lz * sn, cz = s.pos.z + lz * c, R = 1.4;
       for (const list of [obstacles, env.solids]) for (const o of list) {
         if (o.top !== undefined && s.pos.y > o.top) continue;
         const dx = cx - o.x, dz = cz - o.z, d = Math.hypot(dx, dz), m = o.r + R;

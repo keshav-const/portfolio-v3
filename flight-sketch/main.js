@@ -12,6 +12,7 @@ import { buildStation } from './station.js';
 import { blinkLights } from './parts.js';
 import { createQuality } from './quality.js';
 import { createTouch } from './touch.js';
+import { createAmbience } from './ambience.js';
 
 const Q = new URLSearchParams(location.search);
 const KM = 6; // display km per world unit (distances are compressed)
@@ -153,17 +154,18 @@ async function bakeAll(list, onProgress) {
 
 // ---------- planets: each on its own tilted orbit round the star ----------
 // orbit: radius; inc: inclination of the orbit to the reference plane; node: where it crosses it; period: one year (s);
-// spin: turning (rad/s), which sets the length of a day on the surface; tilt: the axial tilt
+// day: sunrise to sunrise on the surface (s), from which the spin (rad/s) follows; tilt: the axial tilt
 const BODIES = [
-  { key: 'technova', name: 'Technova', num: 'I', what: 'Engineering', type: 0, R: 650, scale: [1.16, 0.93, 0.95], g: 0.62, moon: true, orbit: 40000, inc: 0.07, node: 0.4, period: 600, ang: 1.25, tilt: 0.12, atmo: [0.50, 0.56, 0.68], atmoK: 0.25, rs: 1.03, bump: 0.035, clouds: { cov: 0.68, scale: 2.0 }, seed: 2.1, spin: 0.015, shine: [0.18, 0.16, 0.15] },
-  { key: 'ekatva', name: 'Ekatva', num: 'II', what: 'Culture', type: 1, R: 1350, scale: [1, 0.95, 1], g: 1.08, orbit: 60000, inc: -0.13, node: 2.1, period: 900, ang: 1.45, tilt: 0.36, atmo: [0.80, 0.56, 0.36], atmoK: 0.45, rs: 1.08, bump: 0.02, clouds: { cov: 0.55, scale: 3.4 }, seed: 5.3, spin: 0.01, shine: [0.4, 0.26, 0.14] },
-  { key: 'arena', name: 'The Arena', num: 'III', what: 'Sport', type: 2, R: 1000, scale: [1.05, 0.86, 1.05], g: 0.94, orbit: 80000, inc: 0.2, node: 4.0, period: 1300, ang: 1.78, tilt: 0.18, atmo: [0.95, 0.80, 0.58], atmoK: 0.35, rs: 1.06, bump: 0.02, clouds: { cov: 0.60, scale: 6.0 }, seed: 8.7, spin: 0.0039, aurora: true, shine: [0.22, 0.4, 0.14] },
-  { key: 'cosmos', name: 'Cosmos', num: 'IV', what: 'Astronomy', type: 3, R: 460, scale: [1, 1, 1], g: 0.24, ring: [1.55, 2.7], orbit: 100000, inc: -0.3, node: 5.4, period: 1800, ang: 1.2, tilt: 0.5, atmo: [0.55, 0.70, 0.95], atmoK: 0.22, rs: 1.025, bump: 0.04, clouds: null, seed: 11.9, spin: 0.006, shine: [0.5, 0.55, 0.62] },
+  { key: 'technova', name: 'Technova', num: 'I', what: 'Engineering', type: 0, R: 650, scale: [1.16, 0.93, 0.95], g: 0.62, moon: true, orbit: 40000, inc: 0.07, node: 0.4, period: 3600, ang: 1.25, tilt: 0.12, atmo: [0.50, 0.56, 0.68], atmoK: 0.25, rs: 1.03, bump: 0.035, clouds: { cov: 0.68, scale: 2.0 }, seed: 2.1, day: 1200, shine: [0.18, 0.16, 0.15] },
+  { key: 'ekatva', name: 'Ekatva', num: 'II', what: 'Culture', type: 1, R: 1350, scale: [1, 0.95, 1], g: 1.08, orbit: 60000, inc: -0.13, node: 2.1, period: 4800, ang: 1.45, tilt: 0.36, atmo: [0.80, 0.56, 0.36], atmoK: 0.45, rs: 1.08, bump: 0.02, clouds: { cov: 0.55, scale: 3.4 }, seed: 5.3, day: 1800, shine: [0.4, 0.26, 0.14] },
+  { key: 'arena', name: 'The Arena', num: 'III', what: 'Sport', type: 2, R: 1000, scale: [1.05, 0.86, 1.05], g: 0.94, orbit: 80000, inc: 0.2, node: 4.0, period: 6000, ang: 1.78, tilt: 0.18, atmo: [0.95, 0.80, 0.58], atmoK: 0.35, rs: 1.06, bump: 0.02, clouds: { cov: 0.60, scale: 6.0 }, seed: 8.7, day: 2400, aurora: true, shine: [0.22, 0.4, 0.14] },
+  { key: 'cosmos', name: 'Cosmos', num: 'IV', what: 'Astronomy', type: 3, R: 460, scale: [1, 1, 1], g: 0.24, ring: [1.55, 2.7], orbit: 100000, inc: -0.3, node: 5.4, period: 7200, ang: 1.2, tilt: 0.5, atmo: [0.55, 0.70, 0.95], atmoK: 0.22, rs: 1.025, bump: 0.04, clouds: null, seed: 11.9, day: 1500, shine: [0.5, 0.55, 0.62] },
 ];
 const clock = { value: 0 };
 const orbitPoint = (b, a, out = new THREE.Vector3()) => out.set(Math.cos(a) * b.orbit, 0, Math.sin(a) * b.orbit).applyAxisAngle(new THREE.Vector3(Math.cos(b.node), 0, Math.sin(b.node)), b.inc);
 const orbitLines = new THREE.Group(); scene.add(orbitLines);
 for (const b of BODIES) {
+  b.spin = 2 * Math.PI / b.day - 2 * Math.PI / b.period; // the spin runs against the orbit, so the solar day is set by both
   b.pos = orbitPoint(b, b.ang);
   const grp = new THREE.Group(); grp.position.copy(b.pos); grp.rotation.z = b.tilt; grp.scale.set(...b.scale); scene.add(grp); b.group = grp;
   b.Rmax = b.R * Math.max(...b.scale);
@@ -406,10 +408,10 @@ const SUBJECTS = ['vessel', 'technova', 'ekatva', 'arena', 'cosmos', 'star', 'st
 const INFO = {
   vessel: () => [DESIGNS[ship.design].name, 'Your vessel. Drag to turn it, scroll to zoom.'],
   star: () => ['The Star · you', 'The centre of the system, and it stands for you: everything else turns round it. A yellow-white star with boiling granules, dark spots, loops of glowing gas at the edge and a streaming corona. Orbit it to read about you. Too hot to land.'],
-  technova: () => ['Technova · I', 'Gravity 0.62 g. Sunrise to sunrise takes about 4 minutes, a year 10. Its orbit is tilted 4°. Oval: stretched by its moon. Engineering, software and projects. Basalt plateaus, iron flats, ore veins and terraced canyons under thin air and hard light.'],
-  ekatva: () => ['Ekatva · II', 'Gravity 1.08 g. Sunrise to sunrise takes about 6 minutes, a year 15. Orbit tilted 7° the other way. The largest world. History, heritage, forts, books, cinema, music, philosophy and mythology. Russet forest, gold grass, a sandstone belt and silt seas under amber air.'],
-  arena: () => ['The Arena · III', 'Gravity 0.94 g. Sunrise to sunrise takes about 12 minutes, with long golden evenings, a year 22. Orbit tilted 11°. Flattened at the poles. Cricket and sport. Grassland, flower plains, salt flats and mineral lakes. Floodlit grounds and auroras on the night side.'],
-  cosmos: () => ['Cosmos · IV', 'Gravity 0.24 g. Sunrise to sunrise takes about 11 minutes, a year 30. The steepest orbit, tilted 17°. The smallest world, with an ice ring. Astronomy and space science. Ice plains, fractures, crater basins and bare rock under thin, clear air.'],
+  technova: () => ['Technova · I', 'Gravity 0.62 g. Sunrise to sunrise takes 20 minutes, a year an hour. Its orbit is tilted 4°. Oval: stretched by its moon. Engineering, software and projects. Basalt plateaus, iron flats, ore veins and terraced canyons under thin air and hard light.'],
+  ekatva: () => ['Ekatva · II', 'Gravity 1.08 g. Sunrise to sunrise takes 30 minutes, a year 80. Orbit tilted 7° the other way. The largest world. History, heritage, forts, books, cinema, music, philosophy and mythology. Russet forest, gold grass, a sandstone belt and silt seas under amber air.'],
+  arena: () => ['The Arena · III', 'Gravity 0.94 g. Sunrise to sunrise takes 40 minutes, with long golden evenings, a year 100. Orbit tilted 11°. Flattened at the poles. Cricket and sport. Grassland, flower plains, salt flats and mineral lakes. Floodlit grounds and auroras on the night side.'],
+  cosmos: () => ['Cosmos · IV', 'Gravity 0.24 g. Sunrise to sunrise takes 25 minutes, a year two hours. The steepest orbit, tilted 17°. The smallest world, with an ice ring. Astronomy and space science. Ice plains, fractures, crater basins and bare rock under thin, clear air.'],
   station: () => ['Mission Control', 'The base. A habitat wheel, three large ports and the vessel’s berth, solar arrays and radiators.'],
 };
 const insp = { subject: 'vessel', yaw: 0.7, pitch: 0.25, zoom: 1, auto: true };
@@ -559,12 +561,17 @@ function initAudio() {
   for (const g of [audio.cabin, audio.hum, audio.engine, audio.warp, audio.wind]) g.gain.value = 0;
 }
 function cycleSound() { audio.mode = (audio.mode + 1) % 4; document.getElementById('btn-sound').textContent = `Sound: ${SOUND[audio.mode]} · N`; if (audio.mode === 2 && luna.state !== 1) { luna.state = 1; applyLuna(); } }
+let audioLast = 0, audioDt = 0;
 function updateAudio() {
-  if (!audio.ctx) return; const t = audio.ctx.currentTime, k = 0.15;
+  if (!audio.ctx) return; const t = audio.ctx.currentTime, k = 0.15; audioDt = Math.min(0.5, Math.max(0, t - audioLast)); audioLast = t;
   const m = audio.mode; let thr = Math.min(1, thrust.main + (flight.mode === 'travel' ? 0.4 : 0));
   if (WORLD.mode === 'surface') thr = WORLD.surface.thrust() * 1.6;
-  const windAmt = WORLD.mode === 'surface' && m !== 3 ? WORLD.surface.wind * (0.6 + 0.4 * Math.sin(t * 0.37) * Math.sin(t * 0.13)) : 0;
-  audio.wind.gain.setTargetAtTime(windAmt * 0.35, t, 0.4);
+  // the planet's own soundscape on a surface (ambience.js); the generic wind is for elsewhere
+  const ear = WORLD.mode === 'surface' && WORLD.surface && m !== 3 ? WORLD.surface.listen() : null;
+  if (ear && (!audio.amb || audio.amb.key !== ear.key)) { if (audio.amb) audio.amb.dispose(); audio.amb = createAmbience(audio.ctx, audio.master, ear.key); }
+  if (!ear && audio.amb) { audio.amb.dispose(); audio.amb = null; }
+  if (audio.amb) { audio.amb.setLevel([0.25, 1, 0.55, 0][m]); audio.amb.update(ear, audioDt); }
+  audio.wind.gain.setTargetAtTime(0, t, 0.4);
   const lv = m === 0 ? [0.012, 0.004, 0.25, 0.15] : m === 1 ? [0.06, 0.018, 1, 1] : m === 2 ? [0.03, 0.009, 0.5, 0.5] : [0, 0, 0, 0];
   audio.cabin.gain.setTargetAtTime(lv[0], t, k);
   audio.hum.gain.setTargetAtTime(lv[1], t, k);

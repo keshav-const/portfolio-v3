@@ -8,7 +8,7 @@ import { fbm, ss, createPool, createTerrain, createCover, createScatter, treeMod
 import { FIELDS, FORDS, clearOf as clearOfF, HANGAR, MAST, FOUNDRY, FORT, AMPHI, RIVER, GROUND, GRAND, SALT, OBS, CRATER, SCOPE, T_FY, E_AY, A_GY, A_BY, A_0, K_0, K_SY } from './fields.js';
 
 const BOUND = 6000;
-import { buildLander, createLanderSim, poseLander } from './lander.js';
+import { buildLander, createLanderSim, poseLander, FEET } from './lander.js';
 import { buildAstronaut, poseAstronaut, seatAstronaut } from './astronaut.js';
 import { buildRover, createRoverSim, poseRover, SEAT } from './rover.js';
 import { createWater } from './water.js';
@@ -458,7 +458,46 @@ export function createSurface(renderer, key, opts = {}) {
   }
   const wake = { x: 0, z: 0, speed: 0, on: false };
   let roverOut = false;
-  const landerSolid = { x: 0, z: 0, r: 2.6 }; // kept at the lander for the rover's collisions
+  // the lander as solids for the rover and the astronaut: the cabin, and each footpad at the end of its leg
+  const landerSolids = [{ x: 0, z: 0, r: 2.2, cab: true }, ...FEET.map(() => ({ x: 0, z: 0, r: 0.75 }))];
+  const _up = new THREE.Vector3(0, 1, 0), _f = new THREE.Vector3();
+  function placeLanderSolids() {
+    const P = sim.s.pos; landerSolids[0].x = P.x; landerSolids[0].z = P.z;
+    FEET.forEach((f, i) => { _f.copy(f).applyAxisAngle(_up, sim.s.yaw); landerSolids[i + 1].x = P.x + _f.x; landerSolids[i + 1].z = P.z + _f.z; });
+    for (const c of landerSolids) { c.top = P.y + (c.cab ? 6 : 2.6); }
+  }
+  // the rover's footprint, a box in its own frame (wheels and body): half width, half length
+  const RV_HW = 1.5, RV_HL = 2.65;
+  // a spot where the parked rover touches nothing: tried in order, the first clear one wins
+  const _near = [];
+  function clearSpot(cands) {
+    placeLanderSolids();
+    for (const [x, z] of cands) {
+      if (Math.abs(x) > BOUND - 10 || Math.abs(z) > BOUND - 10) continue;
+      if (waterAt - groundAt(x, z) > 0.4) continue;
+      let ok = true;
+      for (const c of [...colliders, ...landerSolids]) { const d = Math.hypot(x - c.x, z - c.z); if (d < c.r + 3.2 && !(c.wall && d < c.r - 8)) { ok = false; break; } }
+      if (ok) { scatter.query(new THREE.Vector3(x, 0, z), 4, _near); for (const r of _near) if (Math.hypot(x - r.x, z - r.z) < r.r + 2.9) { ok = false; break; } }
+      if (ok) return [x, z];
+    }
+    return cands[0];
+  }
+  // a ring of candidate spots round a point, nearest first, starting from a preferred direction
+  function ringAround(px, pz, yaw, r0) {
+    const out = [];
+    for (let r = r0; r < r0 + 30; r += 3) for (let k = 0; k < 12; k++) { const a = yaw + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 6); out.push([px + Math.cos(a) * r, pz - Math.sin(a) * r]); }
+    return out;
+  }
+  // push the astronaut out of the rover's box (it is not a circle: the nose and tail are long)
+  function pushOutOfRover(p) {
+    const c = Math.cos(rv.s.yaw), sn = Math.sin(rv.s.yaw), dx = p.x - rv.s.pos.x, dz = p.z - rv.s.pos.z;
+    const lx = dx * c - dz * sn, lz = dx * sn + dz * c; // into the rover's frame (x across, z along)
+    const hw = RV_HW + 0.35, hl = RV_HL + 0.35;
+    if (Math.abs(lx) >= hw || Math.abs(lz) >= hl || p.y > rv.s.pos.y + 2.2) return;
+    let nx = lx, nz = lz;
+    if (hw - Math.abs(lx) < hl - Math.abs(lz)) nx = Math.sign(lx || 1) * hw; else nz = Math.sign(lz || 1) * hl;
+    p.x = rv.s.pos.x + nx * c + nz * sn; p.z = rv.s.pos.z - nx * sn + nz * c;
+  }
   const seatW = new THREE.Vector3();
 
   const st = {
@@ -526,8 +565,8 @@ export function createSurface(renderer, key, opts = {}) {
       if (st.phase !== 'pilot' || !sim.s.landed) return false;
       st.phase = 'walk'; astro.root.visible = true;
       if (!roverOut) { // unload the rover beside the lander, facing the same way
-        const o = new THREE.Vector3(5.2, 0, 1.0).applyAxisAngle(new THREE.Vector3(0, 1, 0), sim.s.yaw);
-        rv.place(sim.s.pos.x + o.x, sim.s.pos.z + o.z, sim.s.yaw); rover.visible = true; roverOut = true;
+        const [rx, rz] = clearSpot(ringAround(sim.s.pos.x, sim.s.pos.z, sim.s.yaw, 7));
+        rv.place(rx, rz, sim.s.yaw); rover.visible = true; roverOut = true;
       }
       const off = new THREE.Vector3(-1.6, 0, -4.2).applyAxisAngle(new THREE.Vector3(0, 1, 0), sim.s.yaw);
       st.pos.copy(sim.s.pos).add(off); st.pos.y = groundAt(st.pos.x, st.pos.z); st.vel.set(0, 0, 0); st.yaw = sim.s.yaw; st.camDist = 7; st.camYaw = sim.s.yaw + 0.5; return true;
@@ -536,6 +575,15 @@ export function createSurface(renderer, key, opts = {}) {
     get loading() { return !isReady ? 1 : terrain.busy + scatter.busy; },
     // back to the lander from wherever you have walked (the way off the planet is from its cabin)
     get roverOut() { return roverOut; },
+    // what the ears need, for the planet's soundscape: where you are, the light, the wind, the water, the rover
+    listen() {
+      const p = st.phase === 'walk' ? st.pos : st.phase === 'drive' ? rv.s.pos : sim.s.pos;
+      const near = {}; for (const o of pois) near[o.name] = Math.max(0, Math.hypot(p.x - o.x, p.z - o.z) - o.r);
+      return { key, phase: st.phase, day, night, wind: windNow.length(), near,
+        river: key === 'ekatva' ? Math.abs(p.x - RIVER(p.z)) : Infinity, riverX: key === 'ekatva' ? RIVER(p.z) : 0, windK: W.wind, wet: Math.max(0, waterAt - groundAt(p.x, p.z)),
+        speed: st.phase === 'drive' ? Math.abs(rv.s.speed) : 0, splash: st.phase === 'drive' ? rv.s.splash : 0, float: st.phase === 'drive' && rv.s.float,
+        walking: st.phase === 'walk' && Math.hypot(st.vel.x, st.vel.z) > 0.5, camYaw: st.camYaw, x: p.x, z: p.z, pois };
+    },
     rover: rv.s,
     // into the rover (when next to it) or out of it
     drive() {
@@ -551,8 +599,8 @@ export function createSurface(renderer, key, opts = {}) {
     // the rover drives itself to you (shown with a fade by the caller)
     summon() {
       if (st.phase !== 'walk') return false;
-      const o = new THREE.Vector3(3.5, 0, -2).applyAxisAngle(new THREE.Vector3(0, 1, 0), st.yaw);
-      rv.place(st.pos.x + o.x, st.pos.z + o.z, st.yaw); rover.visible = true; roverOut = true; return true;
+      const [rx, rz] = clearSpot(ringAround(st.pos.x, st.pos.z, st.yaw, 5));
+      rv.place(rx, rz, st.yaw); rover.visible = true; roverOut = true; return true;
     },
     recall() { if (st.phase === 'drive') { st.phase = 'walk'; astro.root.rotation.set(0, 0, 0); } if (st.phase !== 'walk') return false; st.phase = 'pilot'; astro.root.visible = false; st.camDist = 22; st.camYaw = sim.s.yaw + 0.5; camYawS = null; return true; },
     setQuality(nq) {
@@ -610,7 +658,7 @@ export function createSurface(renderer, key, opts = {}) {
       // ---- the rover ----
       if (roverOut) {
         const driving = st.phase === 'drive';
-        landerSolid.x = L.pos.x; landerSolid.z = L.pos.z; if (!colliders.includes(landerSolid)) colliders.push(landerSolid);
+        placeLanderSolids(); if (!colliders.includes(landerSolids[0])) colliders.push(...landerSolids);
         rv.update(dt, driving ? { fwd: input.fwd, turn: THREE.MathUtils.clamp(input.turn + input.strafe, -1, 1), brake: input.jump, boost: input.run } : { fwd: 0, turn: 0, brake: true, boost: false });
         poseRover(rover, rv.s, rv.groundAt, night, t, dt);
         if (rv.s.splash > 0.3 && Math.random() < Math.min(1, rv.s.splash * 0.5)) spawnSplash(Math.ceil(rv.s.splash), rv.s.pos.x, rv.s.pos.z, rv.s.yaw, Math.abs(rv.s.speed) + 1);
@@ -642,7 +690,9 @@ export function createSurface(renderer, key, opts = {}) {
         st.vel.y -= g * dt;
         st.vel.x += windNow.x * W.drag * 0.05 * dt; st.vel.z += windNow.z * W.drag * 0.05 * dt;
         st.pos.addScaledVector(st.vel, dt);
-        for (const c of [...colliders, { x: L.pos.x, z: L.pos.z, r: 2.4 }, ...(roverOut ? [{ x: rv.s.pos.x, z: rv.s.pos.z, r: 1.6 }] : [])]) { if (c.top !== undefined && st.pos.y > c.top) continue; const dx = st.pos.x - c.x, dz = st.pos.z - c.z, d = Math.hypot(dx, dz); if (d < c.r + 0.35 && !(c.wall && d < c.r - 4)) { const s = (c.r + 0.35) / Math.max(d, 1e-3); st.pos.x = c.x + dx * s; st.pos.z = c.z + dz * s; } }
+        placeLanderSolids();
+        for (const c of colliders.includes(landerSolids[0]) ? colliders : [...colliders, ...landerSolids]) { if (c.top !== undefined && st.pos.y > c.top) continue; const dx = st.pos.x - c.x, dz = st.pos.z - c.z, d = Math.hypot(dx, dz); if (d < c.r + 0.35 && !(c.wall && d < c.r - 4)) { const s = (c.r + 0.35) / Math.max(d, 1e-3); st.pos.x = c.x + dx * s; st.pos.z = c.z + dz * s; } }
+        if (roverOut) pushOutOfRover(st.pos);
         scatter.collide(st.pos, 0.35, st.pos.y);
         st.pos.x = THREE.MathUtils.clamp(st.pos.x, -BOUND, BOUND); st.pos.z = THREE.MathUtils.clamp(st.pos.z, -BOUND, BOUND);
         if (swim) { // afloat: head above the water, carried a little by the current
