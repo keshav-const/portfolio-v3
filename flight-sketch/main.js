@@ -190,8 +190,8 @@ for (const b of BODIES) {
   atmo.rotation.z = b.tilt; atmo.scale.set(...b.scale); scene.add(atmo); b.atmo = atmo;
   if (b.ring) { // the ring lies in the planet's equator
     const rg = new THREE.Mesh(new THREE.RingGeometry(b.R * b.ring[0], b.R * b.ring[1], 256, 4), new THREE.ShaderMaterial({ vertexShader: RING_VERT, fragmentShader: RING_FRAG, transparent: true, depthWrite: false, side: THREE.DoubleSide,
-      uniforms: { uSun: { value: SUN }, uCenter: { value: b.pos }, uR: { value: b.R }, uIn: { value: b.R * b.ring[0] }, uOut: { value: b.R * b.ring[1] } } }));
-    rg.rotation.set(Math.PI / 2, 0, b.tilt, 'ZYX'); scene.add(rg); b.ringMesh = rg;
+      uniforms: { uSun: { value: SUN }, uCenter: { value: b.pos }, uR: { value: b.R }, uIn: { value: b.R * b.ring[0] }, uOut: { value: b.R * b.ring[1] }, uN: { value: new THREE.Vector3() } } }));
+    rg.rotation.set(Math.PI / 2, 0, b.tilt, 'ZYX'); scene.add(rg); b.ringMesh = rg; rg.material.uniforms.uN.value.set(0, 0, 1).applyQuaternion(rg.quaternion);
   }
   if (b.moon) {
     const mg = new THREE.Group(); scene.add(mg); b.moonGroup = mg; mg.rotation.z = 0.25;
@@ -1029,9 +1029,20 @@ function preset(name) {
   if (name === 'inside') { enterInterior().then(() => { if (Q.has('y')) WORLD.interior.st.yaw = +Q.get('y'); }); }
   if (name === 'dockguide') { ship.pos.copy(BERTH.pos).addScaledVector(BERTH.dir, 110).add(new THREE.Vector3(4, 2, 0)); ship.quat.setFromRotationMatrix(new THREE.Matrix4().lookAt(ship.pos, BERTH.pos, WORLD_UP)); flight.mode = 'manual'; thrust.reset = true; }
   if (name.startsWith('landflow-')) { const b = BODIES.find((x) => x.key === name.slice(9)); at(b.key, 3, 0.6, 0.2); setCourse(b); flight.mode = 'travel'; flight.t = flight.T; setTimeout(() => startLanding(), 1500); }
+  if (name.startsWith('orbit-')) { const b = BODIES.find((x) => x.key === name.slice(6)); at(b.key, 3, 0.6, 0.2); setCourse(b); flight.mode = 'travel'; flight.t = flight.T; }
   if (name === 'staror') { setCourse(STAR); flight.mode = 'travel'; flight.t = flight.T; }
   if (name === 'starclose') { ship.pos.set(0, 900, STAR_R * 2.3); ship.quat.setFromRotationMatrix(new THREE.Matrix4().lookAt(ship.pos, new THREE.Vector3(STAR_R * 0.5, 0, 0), WORLD_UP)); flight.mode = 'manual'; flight.target = STAR; }
   if (name === 'system') { ship.pos.set(30000, 70000, 160000); ship.quat.setFromRotationMatrix(new THREE.Matrix4().lookAt(ship.pos, new THREE.Vector3(0, 0, 0), WORLD_UP)); flight.mode = 'manual'; orbitLines.visible = true; camera.far = 3e6; }
+  if (name === 'ringview') { // behind Cosmos, looking past it at the star
+    const b = BODIES.find((x) => x.key === 'cosmos'); const away = b.pos.clone().normalize();
+    ship.pos.copy(b.pos).addScaledVector(away, b.R * +(Q.get('k') || 5)).add(new THREE.Vector3(0, b.R * +(Q.get('h') || 0.6), b.R * +(Q.get('s') || 0.8)));
+    ship.quat.setFromRotationMatrix(new THREE.Matrix4().lookAt(ship.pos, b.pos.clone().lerp(SUN, +(Q.get('l') || 0.0)), WORLD_UP)); flight.mode = 'manual'; flight.target = b; flight.view = Q.has('insp') ? 'inspect' : 'chase'; }
+  if (name === 'ringinsp') { const b = BODIES.find((x) => x.key === 'cosmos'); const away = b.pos.clone().normalize(); flight.view = 'inspect'; document.body.classList.add('inspecting'); setSubject('cosmos'); insp.auto = false; insp.yaw = Math.atan2(away.x, away.z) + +(Q.get('dy') || 0); insp.pitch = +(Q.get('p') || 0.12); insp.zoom = +(Q.get('z') || 1); }
+  if (name === 'ringstar') { // looking at the star through Cosmos's ring
+    const b = BODIES.find((x) => x.key === 'cosmos'); b.ringMesh.updateMatrixWorld(true);
+    const n = new THREE.Vector3(0, 0, 1).applyQuaternion(b.ringMesh.quaternion); const toSun = SUN.clone().sub(b.pos).normalize();
+    const P = b.pos.clone().addScaledVector(new THREE.Vector3().crossVectors(n, toSun).normalize(), b.R * +(Q.get('r') || 2.1));
+    ship.pos.copy(P).addScaledVector(P.clone().sub(SUN).normalize(), +(Q.get('d') || 1500)); ship.quat.setFromRotationMatrix(new THREE.Matrix4().lookAt(ship.pos, SUN, WORLD_UP)); flight.mode = 'manual'; flight.target = b; }
   if (name === 'starview') { at('technova', 3, 0.0, 0.0); ship.pos.set(0, 1500, 9000); ship.quat.setFromRotationMatrix(new THREE.Matrix4().lookAt(ship.pos, new THREE.Vector3(), WORLD_UP)); }
   if (name === 'shapes') { flight.view = 'inspect'; document.body.classList.add('inspecting'); setSubject(Q.get('s') || 'arena'); }
   if (name === 'home') { ship.pos.copy(STATION.pos).add(new THREE.Vector3(800, 200, -3000)); flight.mode = 'manual'; thrust.reset = true; setCourse(STATION); }

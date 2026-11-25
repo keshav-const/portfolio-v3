@@ -358,7 +358,7 @@ void main(){ vR = length(position.xy); vec4 wp = modelMatrix*vec4(position,1.0);
 export const RING_FRAG = /* glsl */`
 #include <common>
 #include <logdepthbuf_pars_fragment>
-uniform vec3 uSun; uniform vec3 uCenter; uniform float uR; uniform float uIn; uniform float uOut;
+uniform vec3 uSun; uniform vec3 uCenter; uniform float uR; uniform float uIn; uniform float uOut; uniform vec3 uN;
 varying vec3 vWP; varying float vR;
 float h1(float x){ return fract(sin(x*127.1)*43758.5453); }
 void main(){
@@ -369,8 +369,14 @@ void main(){
   vec3 L = normalize(uSun - uCenter); vec3 rel = vWP - uCenter;
   float behind = step(dot(rel, L), 0.0); float dl = length(rel - L*dot(rel,L));
   float shadow = 1.0 - behind*smoothstep(uR*1.02, uR*0.95, dl);
-  vec3 col = vec3(0.86,0.88,0.92)*(0.25 + 0.95*shadow);
-  gl_FragColor = vec4(col, dens*0.85);
+  // the face the sun shines on is bright; from the other side only light scattered forward through the ice comes
+  vec3 V = normalize(cameraPosition - vWP);
+  float sameSide = step(0.0, dot(uN, L)*dot(uN, V));
+  float fwd = pow(max(dot(-V, L), 0.0), 8.0);
+  vec3 col = vec3(0.86,0.88,0.92)*mix(0.12 + 0.5*fwd*(1.0-dens), 0.25 + 0.95*shadow, sameSide);
+  // light through the ring falls off exponentially with its thickness: dense bands hide even the star
+  float a = 1.0 - exp(-dens*5.0);
+  gl_FragColor = vec4(col, a);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
