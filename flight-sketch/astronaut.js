@@ -112,3 +112,14 @@ export function poseAstronaut(a, { phase, speed, air, lowG, lean, dt, t }) {
   a.torso.rotation.y = s * 0.08 * amp;
   a.head.rotation.x = -a.torso.rotation.x * 0.6;
 }
+
+// seated in the rover: thighs forward, shins down, hands on the yoke (which turns with the steering)
+export function seatAstronaut(a, steer, dt) {
+  a.pelvis.position.y = 0.12;
+  a.legL.top.rotation.x = a.legR.top.rotation.x = 1.45; a.legL.mid.rotation.x = a.legR.mid.rotation.x = -1.35;
+  a.legL.end.rotation.x = a.legR.end.rotation.x = 0.2;
+  a.armL.top.rotation.x = a.armR.top.rotation.x = 0.85; a.armL.top.rotation.z = -0.12 + steer * 0.4; a.armR.top.rotation.z = 0.12 + steer * 0.4;
+  a.armL.mid.rotation.x = a.armR.mid.rotation.x = 0.7;
+  a.torso.rotation.x += (-0.05 - a.torso.rotation.x) * (1 - Math.exp(-dt * 6)); a.torso.rotation.y = 0;
+  a.head.rotation.x = 0.03;
+}

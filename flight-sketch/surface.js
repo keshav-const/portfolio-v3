@@ -9,7 +9,8 @@ import { FIELDS, clearOf as clearOfF, HANGAR, MAST, FOUNDRY, FORT, AMPHI, RIVER,
 
 const BOUND = 6000;
 import { buildLander, createLanderSim, poseLander } from './lander.js';
-import { buildAstronaut, poseAstronaut } from './astronaut.js';
+import { buildAstronaut, poseAstronaut, seatAstronaut } from './astronaut.js';
+import { buildRover, createRoverSim, poseRover, SEAT } from './rover.js';
 export { buildLander };
 
 
@@ -433,6 +434,12 @@ export function createSurface(renderer, key, opts = {}) {
   });
   sim.place(-90, at(-90, 140) + 600, 140, 0.3); sim.s.vel.set(10, -40, -14); sim.s.auto = 'descent'; sim.s.wasContact = false;
   const astro = buildAstronaut(); astro.root.visible = false; scene.add(astro.root);
+  // the rover rides down with the lander and is set on the ground when you first step out
+  const rover = buildRover(); rover.visible = false; scene.add(rover);
+  const rv = createRoverSim({ g: W.g, heightAt: (x, z) => groundAt(x, z), solids: colliders, collide: (p, r, y) => scatter.collide(p, r, y), bound: BOUND });
+  let roverOut = false;
+  const landerSolid = { x: 0, z: 0, r: 2.6 }; // kept at the lander for the rover's collisions
+  const seatW = new THREE.Vector3();
 
   const st = {
     phase: 'descent', t: 0, pos: new THREE.Vector3(), vel: new THREE.Vector3(), yaw: 0, camYaw: 0.6, camPitch: 0.22, camDist: 22, camOff: 0, walk: 0, onGround: true,
@@ -498,13 +505,36 @@ export function createSurface(renderer, key, opts = {}) {
     stepOut() {
       if (st.phase !== 'pilot' || !sim.s.landed) return false;
       st.phase = 'walk'; astro.root.visible = true;
+      if (!roverOut) { // unload the rover beside the lander, facing the same way
+        const o = new THREE.Vector3(5.2, 0, 1.0).applyAxisAngle(new THREE.Vector3(0, 1, 0), sim.s.yaw);
+        rv.place(sim.s.pos.x + o.x, sim.s.pos.z + o.z, sim.s.yaw); rover.visible = true; roverOut = true;
+      }
       const off = new THREE.Vector3(-1.6, 0, -4.2).applyAxisAngle(new THREE.Vector3(0, 1, 0), sim.s.yaw);
       st.pos.copy(sim.s.pos).add(off); st.pos.y = groundAt(st.pos.x, st.pos.z); st.vel.set(0, 0, 0); st.yaw = sim.s.yaw; st.camDist = 7; st.camYaw = sim.s.yaw + 0.5; return true;
     },
     ready,
     get loading() { return !isReady ? 1 : terrain.busy + scatter.busy; },
     // back to the lander from wherever you have walked (the way off the planet is from its cabin)
-    recall() { if (st.phase !== 'walk') return false; st.phase = 'pilot'; astro.root.visible = false; st.camDist = 22; st.camYaw = sim.s.yaw + 0.5; camYawS = null; return true; },
+    get roverOut() { return roverOut; },
+    rover: rv.s,
+    // into the rover (when next to it) or out of it
+    drive() {
+      if (st.phase === 'walk' && roverOut && st.pos.distanceTo(rv.s.pos) < 4.5) { st.phase = 'drive'; st.camDist = 12; camYawS = null; st.camOff = 0; return true; }
+      if (st.phase === 'drive') {
+        if (Math.abs(rv.s.speed) > 2) return false;
+        const o = new THREE.Vector3(-2.3, 0, 0.2).applyAxisAngle(new THREE.Vector3(0, 1, 0), rv.s.yaw);
+        st.phase = 'walk'; st.pos.copy(rv.s.pos).add(o); st.pos.y = groundAt(st.pos.x, st.pos.z); st.vel.set(0, 0, 0); st.yaw = rv.s.yaw; st.camYaw = rv.s.yaw + 0.4; st.camDist = 7;
+        astro.root.rotation.set(0, rv.s.yaw, 0); return true;
+      }
+      return false;
+    },
+    // the rover drives itself to you (shown with a fade by the caller)
+    summon() {
+      if (st.phase !== 'walk') return false;
+      const o = new THREE.Vector3(3.5, 0, -2).applyAxisAngle(new THREE.Vector3(0, 1, 0), st.yaw);
+      rv.place(st.pos.x + o.x, st.pos.z + o.z, st.yaw); rover.visible = true; roverOut = true; return true;
+    },
+    recall() { if (st.phase === 'drive') { st.phase = 'walk'; astro.root.rotation.set(0, 0, 0); } if (st.phase !== 'walk') return false; st.phase = 'pilot'; astro.root.visible = false; st.camDist = 22; st.camYaw = sim.s.yaw + 0.5; camYawS = null; return true; },
     setQuality(nq) {
       const mapChanged = nq.shadowMap !== q.shadowMap; q = nq;
       sun.castShadow = q.shadows; if (mapChanged) { sun.shadow.mapSize.set(q.shadowMap, q.shadowMap); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
@@ -513,7 +543,13 @@ export function createSurface(renderer, key, opts = {}) {
     board() { if (st.phase !== 'walk') return false; if (st.pos.distanceTo(sim.s.pos) > 7) return false; st.phase = 'pilot'; astro.root.visible = false; st.camDist = 22; return true; },
     takeOff() { if (st.phase !== 'pilot') return; st.phase = 'ascent'; st.t = 0; sim.s.auto = 'ascent'; },
     resize() { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); },
-    labels() { const out = pois.map((p) => ({ name: p.name, pos: new THREE.Vector3(p.x, at(p.x, p.z) + 12, p.z) })); if (st.phase === 'walk') out.push({ name: 'Lander', pos: sim.s.pos.clone().add(new THREE.Vector3(0, 6.5, 0)), lander: true }); return out; },
+    labels() {
+      const out = pois.map((p) => ({ name: p.name, pos: new THREE.Vector3(p.x, at(p.x, p.z) + 12, p.z) }));
+      if (st.phase === 'walk' || st.phase === 'drive') out.push({ name: 'Lander', pos: sim.s.pos.clone().add(new THREE.Vector3(0, 6.5, 0)), lander: true });
+      if (st.phase === 'walk' && roverOut) out.push({ name: 'Rover', pos: rv.s.pos.clone().add(new THREE.Vector3(0, 3.2, 0)), lander: true });
+      return out;
+    },
+    get here() { return st.phase === 'walk' ? st.pos : st.phase === 'drive' ? rv.s.pos : sim.s.pos; },
     update(dt, input) {
       if (!isReady) return;
       terrain.time.value += dt; skyU.uTime.value = terrain.time.value;
@@ -540,6 +576,21 @@ export function createSurface(renderer, key, opts = {}) {
       for (let i = 0; i < dustN; i++) { const k = i * 3; if (dustPos[k + 1] < -1e4) continue; dustVel[k + 1] -= g * 0.15 * dt; for (let a = 0; a < 3; a++) { dustVel[k + a] *= 1 - dt * (0.4 + W.dust); dustPos[k + a] += dustVel[k + a] * dt; } if (dustPos[k + 1] < groundAt(dustPos[k], dustPos[k + 2])) { dustVel[k] = dustVel[k + 1] = dustVel[k + 2] = 0; } }
       dustGeo.attributes.position.needsUpdate = true; dust.material.opacity = W.dust > 0 ? 0.35 : 0;
 
+      // ---- the rover ----
+      if (roverOut) {
+        const driving = st.phase === 'drive';
+        landerSolid.x = L.pos.x; landerSolid.z = L.pos.z; if (!colliders.includes(landerSolid)) colliders.push(landerSolid);
+        rv.update(dt, driving ? { fwd: input.fwd, turn: THREE.MathUtils.clamp(input.turn + input.strafe, -1, 1), brake: input.jump, boost: input.run } : { fwd: 0, turn: 0, brake: true, boost: false });
+        poseRover(rover, rv.s, night, t);
+        for (const l of rover.userData.lights || []) if (l.kind === 'beacon') l.m.visible = ((t + l.phase) % 1.6) < 0.14;
+        if (driving) { // the astronaut sits in the driver's seat
+          seatW.copy(SEAT).applyQuaternion(rover.quaternion).add(rover.position);
+          astro.root.position.copy(seatW); astro.root.quaternion.copy(rover.quaternion);
+          seatAstronaut(astro, rv.s.steer, dt);
+          st.pos.copy(rv.s.pos);
+          if (Math.abs(rv.s.speed) > 3 && W.dust > 0 && Math.random() < 0.6) spawnDust(2, new THREE.Vector3(rv.s.pos.x - Math.sin(rv.s.yaw) * -2.2, 0, rv.s.pos.z - Math.cos(rv.s.yaw) * -2.2), 0.5, 2, 1.5);
+        }
+      }
       // ---- on foot ----
       if (st.phase === 'walk') {
         const fwd = new THREE.Vector3(-Math.sin(st.camYaw), 0, -Math.cos(st.camYaw)), right = new THREE.Vector3(Math.cos(st.camYaw), 0, -Math.sin(st.camYaw));
@@ -558,20 +609,25 @@ export function createSurface(renderer, key, opts = {}) {
         st.vel.y -= g * dt;
         st.vel.x += windNow.x * W.drag * 0.05 * dt; st.vel.z += windNow.z * W.drag * 0.05 * dt;
         st.pos.addScaledVector(st.vel, dt);
-        for (const c of [...colliders, { x: L.pos.x, z: L.pos.z, r: 2.4 }]) { if (c.top !== undefined && st.pos.y > c.top) continue; const dx = st.pos.x - c.x, dz = st.pos.z - c.z, d = Math.hypot(dx, dz); if (d < c.r + 0.35 && !(c.wall && d < c.r - 4)) { const s = (c.r + 0.35) / Math.max(d, 1e-3); st.pos.x = c.x + dx * s; st.pos.z = c.z + dz * s; } }
+        for (const c of [...colliders, { x: L.pos.x, z: L.pos.z, r: 2.4 }, ...(roverOut ? [{ x: rv.s.pos.x, z: rv.s.pos.z, r: 1.6 }] : [])]) { if (c.top !== undefined && st.pos.y > c.top) continue; const dx = st.pos.x - c.x, dz = st.pos.z - c.z, d = Math.hypot(dx, dz); if (d < c.r + 0.35 && !(c.wall && d < c.r - 4)) { const s = (c.r + 0.35) / Math.max(d, 1e-3); st.pos.x = c.x + dx * s; st.pos.z = c.z + dz * s; } }
         scatter.collide(st.pos, 0.35, st.pos.y);
         st.pos.x = THREE.MathUtils.clamp(st.pos.x, -BOUND, BOUND); st.pos.z = THREE.MathUtils.clamp(st.pos.z, -BOUND, BOUND);
         const gy = groundAt(st.pos.x, st.pos.z);
         if (st.pos.y <= gy) { if (!st.onGround && st.vel.y < -4) st.land = 0.25; st.pos.y = gy; st.vel.y = 0; st.onGround = true; } else if (st.pos.y > gy + 0.06) st.onGround = false;
-        astro.root.position.copy(st.pos);
+        astro.root.position.copy(st.pos); astro.root.rotation.x = astro.root.rotation.z = 0;
         astro.root.rotation.y += wrapAngle(st.yaw - astro.root.rotation.y) * (1 - Math.exp(-dt * 10));
         const hs = Math.hypot(st.vel.x, st.vel.z); st.walk += dt * hs * (lowG ? 1.5 : 2.3);
         poseAstronaut(astro, { phase: st.walk, speed: hs, air: !st.onGround && st.vel.y > -0.5 && !lowG, lowG, lean: Math.min(0.12, hs * 0.02), dt, t });
       }
       // ---- camera ----
-      focus.copy(st.phase === 'walk' ? st.pos : L.pos).add(new THREE.Vector3(0, st.phase === 'walk' ? 1.5 : 3, 0));
+      focus.copy(st.phase === 'walk' ? st.pos : st.phase === 'drive' ? rv.s.pos : L.pos).add(new THREE.Vector3(0, st.phase === 'walk' ? 1.5 : st.phase === 'drive' ? 1.8 : 3, 0));
       let yaw, dist;
       if (st.phase === 'walk') { yaw = st.camYaw; dist = st.camDist; }
+      else if (st.phase === 'drive') { // a chase camera that swings round behind the rover as it turns
+        if (!input.dragging) st.camOff *= Math.exp(-dt * (Math.abs(rv.s.speed) > 2 ? 1.2 : 0.05));
+        const want = rv.s.yaw + st.camOff; camYawS = camYawS === null ? want : camYawS + wrapAngle(want - camYawS) * (1 - Math.exp(-dt * 3.5));
+        yaw = camYawS; dist = st.camDist * (1 + Math.min(0.4, Math.abs(rv.s.speed) / 50)); st.camYaw = yaw;
+      }
       else if (st.phase === 'pilot') {
         if (!input.dragging) st.camOff *= Math.exp(-dt * (Math.hypot(L.vel.x, L.vel.z) > 3 ? 0.8 : 0.05));
         const want = L.yaw + st.camOff; camYawS = camYawS === null ? want : camYawS + wrapAngle(want - camYawS) * (1 - Math.exp(-dt * 3));
@@ -586,9 +642,11 @@ export function createSurface(renderer, key, opts = {}) {
       // stream the land, the plants and the rocks around you
       terrain.update(focus); scatter.update(focus); for (const c of covers) c.update(camera.position);
       if (motes) { motes.position.set(focus.x, focus.y - 8, focus.z); const a = motes.geometry.attributes.position; for (let i = 0; i < a.count; i++) { let x = a.getX(i) + windNow.x * dt * 0.4, z = a.getZ(i) + windNow.z * dt * 0.4; if (x > 60) x -= 120; if (x < -60) x += 120; if (z > 60) z -= 120; if (z < -60) z += 120; a.setX(i, x); a.setZ(i, z); a.setY(i, a.getY(i) + Math.sin(t + i) * dt * 0.2); } a.needsUpdate = true; }
-      const here = st.phase === 'walk' ? st.pos : L.pos;
+      const here = st.phase === 'walk' ? st.pos : st.phase === 'drive' ? rv.s.pos : L.pos;
       st.poi = pois.find((q) => Math.hypot(here.x - q.x, here.z - q.z) < q.r) || null;
       st.nearLander = st.phase === 'walk' && st.pos.distanceTo(L.pos) < 7;
+      st.nearRover = st.phase === 'walk' && roverOut && st.pos.distanceTo(rv.s.pos) < 4.5;
+      st.roverFar = st.phase === 'walk' && (!roverOut || st.pos.distanceTo(rv.s.pos) > 30);
     },
     dispose() {
       terrain.dispose(); scatter.dispose(); covers.forEach((c) => c.dispose()); pool.dispose();

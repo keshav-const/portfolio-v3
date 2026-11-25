@@ -334,7 +334,12 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Space' || e.code.startsWith('Arrow') || e.code === 'Tab') e.preventDefault();
   if (WORLD.mode === 'surface') {
     const s = WORLD.surface;
-    if (e.code === 'KeyE') { if (s.st.phase === 'pilot') { if (!s.stepOut()) s.st.lander.msg = 'Land first: hold Shift to settle', s.st.lander.msgT = 2.5; } else if (s.st.phase === 'walk' && !s.board()) { /* too far */ } }
+    if (e.code === 'KeyE' && !e.repeat) {
+      if (s.st.phase === 'pilot') { if (!s.stepOut()) s.st.lander.msg = 'Land first: hold Shift to settle', s.st.lander.msgT = 2.5; }
+      else if (s.st.phase === 'walk') { if (s.st.nearRover) s.drive(); else s.board(); }
+      else if (s.st.phase === 'drive' && !s.drive()) { s.st.lander.msg = 'Slow down to get out'; s.st.lander.msgT = 2; }
+    }
+    if (e.code === 'KeyF' && !e.repeat) summonRover();
     if (e.code === 'KeyT') recallToLander(true);
     if (e.code === 'KeyB') recallToLander(false);
     if (e.code === 'KeyN') cycleSound(); if (e.code === 'KeyL') cycleLuna(); if (e.code === 'KeyM') { WORLD.labels = !WORLD.labels; }
@@ -653,8 +658,13 @@ async function enterSurface(b) {
 // back to the lander from anywhere on foot; with leave, straight on up to orbit
 async function recallToLander(leave) {
   const s = WORLD.surface; if (!s || WORLD.busy) return;
-  if (s.st.phase === 'walk') { WORLD.busy = true; await fade(1, 350); s.recall(); if (leave) s.takeOff(); await fade(0, 500); WORLD.busy = false; }
+  if (s.st.phase === 'walk' || s.st.phase === 'drive') { WORLD.busy = true; await fade(1, 350); s.recall(); if (leave) s.takeOff(); await fade(0, 500); WORLD.busy = false; }
   else if (leave && s.st.phase === 'pilot') s.takeOff();
+}
+// the rover drives over to you (the trip is skipped with a short fade)
+async function summonRover() {
+  const s = WORLD.surface; if (!s || WORLD.busy || s.st.phase !== 'walk' || s.st.nearRover) return;
+  WORLD.busy = true; await fade(1, 300); s.summon(); await fade(0, 400); WORLD.busy = false;
 }
 const loadingEl = document.getElementById('w-loading');
 function showLoading(text) { loadingEl.hidden = !text; if (text) loadingEl.textContent = text; }
@@ -699,12 +709,14 @@ function updateWorldHUD() {
     setText(worldEls.p, msg || (st.phase === 'descent' ? 'Descending · any flight key to take over'
       : st.phase === 'ascent' ? 'Lifting off to orbit'
       : st.phase === 'pilot' ? (L.landed ? 'Landed · E step outside · Space lift off · T back to orbit' : L.aglHold <= 0.4 ? 'Settling' : 'Flying · Shift down to land')
-      : st.nearLander ? 'E · Board the lander' : st.poi ? `You are at ${st.poi.name}` : 'Explore · B back to the lander · T leave the planet'));
-    setText(worldEls.h, st.phase === 'walk' ? 'W A S D walk · Shift run · Space jump · drag to look · scroll to zoom · B lander · T leave · M labels · P graphics'
+      : st.phase === 'drive' ? `Driving · ${Math.round(Math.abs(s.rover.speed) * 3.6)} km/h${s.rover.air ? ' · airborne' : ''}${st.poi ? ' · ' + st.poi.name : ''}`
+      : st.nearRover ? 'E · Drive the rover' : st.nearLander ? 'E · Board the lander' : st.poi ? `You are at ${st.poi.name}` : s.roverOut ? 'Explore · F call the rover · B back to the lander' : 'Explore · B back to the lander · T leave the planet'));
+    setText(worldEls.h, st.phase === 'drive' ? 'W S drive / reverse · A D steer · Shift fast · Space brake · E get out · B lander · drag to look'
+      : st.phase === 'walk' ? 'W A S D walk · Shift run · Space jump · drag to look · scroll to zoom · F rover · B lander · T leave · M labels · P graphics'
       : st.phase === 'pilot' ? 'W S forward/back · A D turn · ← → sideways · Space up · Shift down · R boost · drag to look · M labels · P graphics' : 'Drag to look around');
     updateSunPanel(el);
     updateActions(st, L);
-    const r = document.getElementById('w-read'); r.hidden = st.phase === 'walk';
+    const r = document.getElementById('w-read'); r.hidden = st.phase === 'walk' || st.phase === 'drive';
     if (!r.hidden) {
       setText(document.getElementById('wr-alt'), `${Math.max(0, L.agl).toFixed(L.agl < 10 ? 1 : 0)} m`);
       setText(document.getElementById('wr-vs'), `${L.vel.y >= 0 ? '+' : '−'}${Math.abs(L.vel.y).toFixed(1)} m/s`);
@@ -752,15 +764,17 @@ function updateSunPanel(elevDeg) {
 const actEls = {}; document.querySelectorAll('#w-actions button').forEach((b) => { actEls[b.dataset.act] = b; b.addEventListener('click', () => { dispatchEvent(new KeyboardEvent('keydown', { code: b.dataset.key })); setTimeout(() => keys.delete(b.dataset.key), 60); b.blur(); }); });
 function updateActions(st, L) {
   const walk = st.phase === 'walk', pilot = st.phase === 'pilot';
-  actEls.out.hidden = !(pilot && L.landed); actEls.board.hidden = !(walk && st.nearLander);
-  actEls.back.hidden = !(walk && !st.nearLander); actEls.leave.hidden = !(walk || pilot);
+  const drive = st.phase === 'drive';
+  actEls.out.hidden = !(pilot && L.landed); actEls.board.hidden = !(walk && st.nearLander && !st.nearRover);
+  actEls.drive.hidden = !(walk && st.nearRover); actEls.exit.hidden = !drive; actEls.call.hidden = !(walk && st.roverFar && !st.nearLander);
+  actEls.back.hidden = !((walk && !st.nearLander) || drive); actEls.leave.hidden = !(walk || pilot || drive);
 }
 // labels over the places on a surface, with their distance
 const sBox = document.getElementById('s-markers'); const sEls = new Map();
 function updateSurfaceLabels() {
   const s = WORLD.mode === 'surface' ? WORLD.surface : null;
   sBox.hidden = !s || WORLD.labels === false; if (sBox.hidden) return;
-  const cam = s.camera, w = innerWidth, h = innerHeight, from = s.st.phase === 'walk' ? s.st.pos : s.landerPos(), seen = new Set();
+  const cam = s.camera, w = innerWidth, h = innerHeight, from = s.here, seen = new Set();
   for (const l of s.labels()) {
     let el = sEls.get(l.name); if (!el) { el = document.createElement('div'); el.className = 'smk'; el.innerHTML = '<span class="n"></span><span class="d"></span>'; sBox.appendChild(el); sEls.set(l.name, el); el.querySelector('.n').textContent = l.name; }
     seen.add(l.name);
@@ -1025,7 +1039,7 @@ function preset(name) {
   if (name.startsWith('surface-')) { const b = BODIES.find((x) => x.key === name.slice(8)); flight.target = b; fadeEl.style.transition = 'none';
     at(b.key, 1.75, 0.6, 0.2); flight.mode = 'orbit'; flight.rel = ship.pos.clone().sub(b.pos); flight.orbitR = b.Rmax * 1.75; flight.orbitAxis.set(0, 1, 0);
     siteAtElevation(b, +(Q.get('sun') ?? 35), !Q.has('am'));
-    enterSurface(b).then(() => { const s = WORLD.surface; if (Q.has('landed') || Q.has('walk')) s.skipToLanded(+(Q.get('lx') || 0), +(Q.get('lz') || 0), +(Q.get('ly') || 0.3)); if (Q.has('walk')) { s.stepOut(); s.st.pos.x += +(Q.get('dx') || 0); s.st.pos.z += +(Q.get('dz') || 0); } s.st.camYaw = +(Q.get('y') || 0.6); s.st.camPitch = +(Q.get('p') || 0.25); if (Q.has('cd')) s.st.camDist = +Q.get('cd'); if (Q.has('fly')) { s.st.lander.aglHold = +Q.get('fly'); s.st.lander.pos.y += +Q.get('fly'); } }); }
+    enterSurface(b).then(() => { const s = WORLD.surface; if (Q.has('landed') || Q.has('walk')) s.skipToLanded(+(Q.get('lx') || 0), +(Q.get('lz') || 0), +(Q.get('ly') || 0.3)); if (Q.has('walk')) { s.stepOut(); if (Q.has('drive')) { s.st.pos.copy(s.rover.pos); s.drive(); } s.st.pos.x += +(Q.get('dx') || 0); s.st.pos.z += +(Q.get('dz') || 0); } s.st.camYaw = +(Q.get('y') || 0.6); s.st.camPitch = +(Q.get('p') || 0.25); if (Q.has('cd')) s.st.camDist = +Q.get('cd'); if (Q.has('fly')) { s.st.lander.aglHold = +Q.get('fly'); s.st.lander.pos.y += +Q.get('fly'); } }); }
   if (name === 'inside') { enterInterior().then(() => { if (Q.has('y')) WORLD.interior.st.yaw = +Q.get('y'); }); }
   if (name === 'dockguide') { ship.pos.copy(BERTH.pos).addScaledVector(BERTH.dir, 110).add(new THREE.Vector3(4, 2, 0)); ship.quat.setFromRotationMatrix(new THREE.Matrix4().lookAt(ship.pos, BERTH.pos, WORLD_UP)); flight.mode = 'manual'; thrust.reset = true; }
   if (name.startsWith('landflow-')) { const b = BODIES.find((x) => x.key === name.slice(9)); at(b.key, 3, 0.6, 0.2); setCourse(b); flight.mode = 'travel'; flight.t = flight.T; setTimeout(() => startLanding(), 1500); }
@@ -1107,7 +1121,7 @@ function watchFrames(raw, dt) {
   }
 }
 const pipeline = () => (WORLD.mode === 'surface' && ground ? ground : space);
-if (Q.has('shot')) window.__dbg = { get info() { const r = pipeline().r.info.render; return { calls: r.calls, tris: r.triangles, pr: pixelRatio, tier: GFX.key, mode: WORLD.mode, loading: WORLD.surface ? WORLD.surface.loading : 0 }; } };
+if (Q.has('shot')) window.__dbg = { get world() { return WORLD; }, get info() { const r = pipeline().r.info.render; return { calls: r.calls, tris: r.triangles, pr: pixelRatio, tier: GFX.key, mode: WORLD.mode, loading: WORLD.surface ? WORLD.surface.loading : 0 }; } };
 setLevel(1); applyLuna(); updateGfxLabel();
 createTouch(keys, { action: (code) => dispatchEvent(new KeyboardEvent('keydown', { code })) });
 // the planets' maps are rendered at load, a little at a time

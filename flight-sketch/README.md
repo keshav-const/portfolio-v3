@@ -51,6 +51,10 @@ Flying the lander on a surface:
 On foot: W A S D walk, Shift run (on Cosmos you lope), Space jump, drag to look, scroll to zoom, E board the lander,
 B back to the lander from anywhere, T straight back to orbit. The same actions are buttons under the readouts.
 
+The rover: unloaded beside the lander when you first step out. E next to it to drive, E again to get out (once slow).
+W / S drive and reverse, A D (or ← →) steer, Shift fast (72 km/h), Space brake. F calls it to you if you have left
+it behind. Grip follows gravity: on Ekatva it holds the road; on Cosmos it slides in turns and flies off crests.
+
 The panel under the readouts counts down to the next sunset and sunrise at the landing site (worked out by running the
 planet's spin and orbit forward), with the length of daylight and dark; the dial shows where the sun is in the day.
 
