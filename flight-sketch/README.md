@@ -53,7 +53,18 @@ B back to the lander from anywhere, T straight back to orbit. The same actions a
 
 The rover: unloaded beside the lander when you first step out. E next to it to drive, E again to get out (once slow).
 W / S drive and reverse, A D (or ← →) steer, Shift fast (72 km/h), Space brake. F calls it to you if you have left
-it behind. Grip follows gravity: on Ekatva it holds the road; on Cosmos it slides in turns and flies off crests.
+it behind. Six metal wheels on rocker-bogie suspension, each reaching for the ground under it.
+- Grip is friction against gravity: on Ekatva it holds the road and climbs steep slopes; on Cosmos it slides in
+  turns, pulls away slowly and flies off crests.
+- Wind pushes on its side (and turns it a little); a head wind slows it.
+- Rocks lower than about 0.75 m are driven over (the wheels ride up them); bigger rocks and trees are hit: you lose
+  most of the speed, bounce back and the body shakes.
+- Water (Ekatva's river and seas): it wades through shallows, slowing with depth and throwing spray; past 1.1 m it
+  floats, paddles at walking pace and drifts with the current. The river banks are too steep to climb out of, so
+  cross at one of the three fords (labelled), or float down to one. On foot you wade, then swim.
+
+Water is one shaded plane: ripples flow with the river, colour deepens with depth, the sky and sun reflect at low
+angles, shores fade out with foam, and anything moving through it leaves a wake.
 
 The panel under the readouts counts down to the next sunset and sunrise at the landing site (worked out by running the
 planet's spin and orbit forward), with the length of daylight and dark; the dial shows where the sun is in the day.
@@ -62,8 +73,22 @@ Docking yourself: fly toward the berth on the front of the station. Within 3 km 
 | N | Sound: Vacuum, Ambience, Music (display only), Off |
 | L | Luna: compact, expanded, minimized, hidden |
 
-On a phone or tablet: a stick on the left (it presses W A S D), Up / Down / Boost on the right, drag to look,
-tap markers to travel, and the on-screen buttons for everything else. Add `?touch` to force these on a desktop.
+On a phone or tablet the controls on screen follow what you are doing (touch.js); add `?touch` to see them on a desktop.
+
+| Mode | Stick (left) | Right side | Actions (top right) |
+|---|---|---|---|
+| Docked | — | — | Undock, Go inside; ··· for views, sound, graphics |
+| Flying | steer (yaw, pitch) | throttle slider; Brake, Roll ◁ ▷ held | Dock (near the station) or Mission Control, Cancel course |
+| Travelling | — | — | Cancel course |
+| In orbit | — | — | Land, Leave orbit, Mission Control |
+| Inspect | — | — | Next, Zoom + / −, Back to flight (and pinch to zoom) |
+| Lander | fly | Up, Down, Boost held | Step out, Leave the planet |
+| On foot | walk | Jump, Run held | Drive / Board, Call the rover, To the lander |
+| Driving | drive and steer | Brake, Fast held | Get out, To the lander |
+| Inside | walk | — | Back to the vessel |
+
+One finger on the view looks around (or steers in flight); two fingers pinch to zoom. Tap a marker to set a course;
+the speed levels stay at the top left. The stick is analog.
 
 ## Graphics levels and performance
 

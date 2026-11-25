@@ -7,6 +7,7 @@ export const HANGAR = [95, -110], MAST = [30, -160], FOUNDRY = [-1700, -2300];
 export const FORT = [-150, -230], AMPHI = [1500, 1150];
 export const RIVER = (z) => 175 + 70 * Math.sin(z / 260) + 380 * (Math.sin(z / 1500 + 1.0) - Math.sin(1.0));
 export const GROUND = [0, -215], GRAND = [1650, -2150], SALT = [-2300, 1500];
+export const FORDS = [180, -900, 1250];
 export const OBS = [-120, -185], CRATER = [560, -720], SCOPE = [2300, -1750];
 
 const T_raw = (x, z) => {
@@ -53,6 +54,8 @@ export const FIELDS = {
     h(x, z) {
       let h = E_raw(x, z);
       h = lerp(h, -20, ss(45, 12, Math.abs(x - RIVER(z))));
+      // fords: shallow gravel crossings where the bed rises to just under the surface
+      for (const fz of FORDS) { const k = ss(60, 25, Math.abs(z - fz)); if (k > 0) h = Math.max(h, lerp(h, -12.6 + Math.abs(x - RIVER(z)) * 0.02, k)); }
       const df = Math.hypot(x - FORT[0], z - FORT[1]); h += 42 * Math.exp(-(df * df) / (2 * 75 * 75)); h = lerp(h, 34, ss(58, 46, df));
       h = lerp(h, E_AY, ss(170, 120, Math.hypot(x - AMPHI[0], z - AMPHI[1])));
       return lerp(h, 6, ss(90, 40, Math.hypot(x, z)));

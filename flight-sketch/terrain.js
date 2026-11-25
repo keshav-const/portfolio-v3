@@ -325,8 +325,22 @@ export function createScatter(scene, defs, pool, q) {
       }
     }
   }
+  // what stands near a point: [{ x, z, r, top }] (r: solid radius, top: highest point), for vehicles to drive over or hit
+  function query(p, rad, out = []) {
+    out.length = 0;
+    const fi = Math.floor(p.x / TILE), fj = Math.floor(p.z / TILE), r2 = rad * rad;
+    for (let i = fi - 1; i <= fi + 1; i++) for (let j = fj - 1; j <= fj + 1; j++) {
+      const t = tiles.get(tk(i, j)); if (!t) continue;
+      for (let o = 0; o < t.length; o += ITEM) {
+        const r = t[o + 23]; if (!r) continue;
+        const dx = t[o + 21] - p.x, dz = t[o + 22] - p.z; if (dx * dx + dz * dz > r2) continue;
+        out.push({ x: t[o + 21], z: t[o + 22], r, top: t[o + 24], tall: t[o] === 0 && defs[0].tall });
+      }
+    }
+    return out;
+  }
   function setQuality(nq) { q = nq; for (const vs of near) for (const parts of vs) for (const im of parts) im.castShadow = !!im.userData.shadow && q.shadows; dirty = true; }
-  return { update, collide, setQuality, get busy() { return queue.length + pending.size; }, dispose() { disposed = true; bands.flat(3).forEach((m) => { scene.remove(m); m.dispose(); }); } };
+  return { update, collide, query, setQuality, get busy() { return queue.length + pending.size; }, dispose() { disposed = true; bands.flat(3).forEach((m) => { scene.remove(m); m.dispose(); }); } };
 }
 
 // ---------- models for the scatter ----------

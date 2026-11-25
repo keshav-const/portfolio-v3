@@ -5,12 +5,13 @@ import * as THREE from 'three';
 import { MAT, makeMaterials, label } from './parts.js';
 import { NOISE } from './shaders.js';
 import { fbm, ss, createPool, createTerrain, createCover, createScatter, treeModels, leafMaterial, rockModels, shardModels, windify } from './terrain.js';
-import { FIELDS, clearOf as clearOfF, HANGAR, MAST, FOUNDRY, FORT, AMPHI, RIVER, GROUND, GRAND, SALT, OBS, CRATER, SCOPE, T_FY, E_AY, A_GY, A_BY, A_0, K_0, K_SY } from './fields.js';
+import { FIELDS, FORDS, clearOf as clearOfF, HANGAR, MAST, FOUNDRY, FORT, AMPHI, RIVER, GROUND, GRAND, SALT, OBS, CRATER, SCOPE, T_FY, E_AY, A_GY, A_BY, A_0, K_0, K_SY } from './fields.js';
 
 const BOUND = 6000;
 import { buildLander, createLanderSim, poseLander } from './lander.js';
 import { buildAstronaut, poseAstronaut, seatAstronaut } from './astronaut.js';
 import { buildRover, createRoverSim, poseRover, SEAT } from './rover.js';
+import { createWater } from './water.js';
 export { buildLander };
 
 
@@ -41,6 +42,12 @@ vec3 albedo(vec3 p, vec3 n, vec3 m, float dist, inout float rough){
     name: 'Ekatva', g: 1.08, wind: 0.55, windDir: [0.9, 0.44], drag: 0.2, dust: 0.25, dustCol: [0.6, 0.45, 0.25],
     sky: { dayZen: 0x56637a, dayHor: 0xe2ad78, setHor: 0xe8683a, nightZen: 0x04060c, nightHor: 0x17141c, sunCol: [1.0, 0.82, 0.58], sunI: 2.8, stars: 0, clouds: 0.6, ring: 0, aurora: 0, sun: [-0.55, 0.28, -0.79] },
     fog: 0.00034, hemi: [0xd8b088, 0x3a2016, 0.75], expo: 1.0, water: -12,
+    // the river flows south along its bed; the silt seas are still
+    waterSpec: { level: -12, shallow: [0.30, 0.29, 0.17], deep: [0.02, 0.055, 0.05],
+      current(x, z, out) { const rx = RIVER(z), d = Math.abs(x - rx), near = 1 - Math.min(1, Math.max(0, (d - 20) / 35)); const dx = (70 / 260) * Math.cos(z / 260) + (380 / 1500) * Math.cos(z / 1500 + 1); const l = Math.hypot(dx, 1); return out.set((dx / l) * 1.3 * near, 0, (1 / l) * 1.3 * near); },
+      flow: `vec2 flowAt(vec2 p){ float z = p.y; float rx = 175.0 + 70.0*sin(z/260.0) + 380.0*(sin(z/1500.0+1.0) - sin(1.0));
+        float dx = 70.0/260.0*cos(z/260.0) + 380.0/1500.0*cos(z/1500.0+1.0);
+        return normalize(vec2(dx, 1.0)) * 1.3 * (1.0 - smoothstep(20.0, 55.0, abs(p.x - rx))); }` },
     glsl: /* glsl */`
 float relief(vec2 p, vec3 m){ return fb2(p*0.45, 3)*0.25*(1.0-m.y*0.6) + vn2(p*2.5)*0.05; }
 vec3 albedo(vec3 p, vec3 n, vec3 m, float dist, inout float rough){
@@ -254,6 +261,7 @@ function features(key, W, root, colliders, lamps, at) {
     colliders.push({ x: ax, z: az, r: 75, wall: true, top: E_AY + 17 });
     return [{ name: 'The Fort', x: fx, z: fz, r: 75, text: 'History, heritage, and the forts and architecture of Rajasthan. [CONTENT — you supply]' },
       { name: 'The river', x: RIVER(-60), z: -60, r: 40, text: 'Books, read and reading, along the slow water. [CONTENT — you supply]' },
+      ...[['The ford', FORDS[0]], ['The upper ford', FORDS[1]], ['The lower ford', FORDS[2]]].map(([name, z]) => ({ name, x: RIVER(z), z, r: 35, text: 'A shallow crossing: the rover can drive through here. Elsewhere the river is deep enough to float in, the current carries you downstream, and the banks are too steep to climb out.' })),
       { name: 'Russet forest', x: 60, z: 140, r: 60, text: 'Mythology and philosophy. [CONTENT — you supply]' },
       { name: 'The Amphitheatre', x: ax, z: az, r: 110, text: 'Cinema and music. [CONTENT — you supply]' }];
   }
@@ -355,8 +363,8 @@ function scatterDefs(key, W, wind) {
       [{ geo: t.farWood, mat: wood, tint: false }, { geo: t.farCrown, mat: crown }], [{ geo: t.farthestWood, mat: wood, tint: false }, { geo: t.farthestCrown, mat: crown }]] };
   });
   const rocks = (n, o, colour) => { const mat = rockMat(colour); const l0 = rockModels(n, { ...o, detail: 2 }), l1 = rockModels(n, { ...o, detail: 1 }), l2 = rockModels(n, { ...o, detail: 0 }); return l0.map((geo, i) => ({ lods: [[{ geo, mat }], [{ geo: l1[i], mat }], [{ geo: l2[i], mat }]] })); };
-  if (key === 'ekatva') return [{ variants: tree('broad', 0.004), cap: 7000, shadow: true }, { variants: rocks(3, { seed: 5, flatten: 0.55 }, 0xa47656), cap: 3000, shadow: true }];
-  if (key === 'arena') return [{ variants: tree('parasol', 0.003), cap: 2500, shadow: true }, { variants: rocks(3, { seed: 9, flatten: 0.6 }, 0x8a6a56), cap: 2000, shadow: true }];
+  if (key === 'ekatva') return [{ variants: tree('broad', 0.004), cap: 7000, shadow: true, tall: true }, { variants: rocks(3, { seed: 5, flatten: 0.55 }, 0xa47656), cap: 3000, shadow: true }];
+  if (key === 'arena') return [{ variants: tree('parasol', 0.003), cap: 2500, shadow: true, tall: true }, { variants: rocks(3, { seed: 9, flatten: 0.6 }, 0x8a6a56), cap: 2000, shadow: true }];
   if (key === 'technova') return [{ variants: rocks(4, { seed: 2, flatten: 0.7, rough: 0.6 }, 0x2c2b2c), cap: 9000, shadow: true }];
   const ice = std({ color: 0xd8e8f8, roughness: 0.15, metalness: 0.05, vertexColors: true });
   return [{ variants: rocks(3, { seed: 4, flatten: 0.6 }, 0x3a3836), cap: 6000, shadow: true }, { variants: shardModels(3).map((geo) => ({ lods: [[{ geo, mat: ice }]] })), cap: 2000, shadow: true }];
@@ -386,7 +394,8 @@ export function createSurface(renderer, key, opts = {}) {
   const pool = createPool(key, q.workers);
   const terrain = createTerrain(scene, W, renderer, pool, q);
   const at = (x, z) => terrain.heightAt(x, z);
-  if (W.water !== undefined) { const w = new THREE.Mesh(new THREE.PlaneGeometry(30000, 30000), std({ color: 0x29251a, roughness: 0.06, metalness: 0.4, transparent: true, opacity: 0.93 })); w.rotation.x = -Math.PI / 2; w.position.y = W.water; scene.add(w); }
+  const water = W.waterSpec ? createWater(scene, terrain, W.waterSpec) : null;
+  const waterAt = water ? water.level : -Infinity;
 
   const colliders = [], lamps = [];
   const pois = features(key, W, scene, colliders, lamps, at);
@@ -429,14 +438,25 @@ export function createSurface(renderer, key, opts = {}) {
   const groundAt = (x, z) => at(x, z) + (key === 'technova' && Math.hypot(x, z) < 16 ? 0.25 : 0);
   const windNow = new THREE.Vector3();
   const sim = createLanderSim({
-    g: W.g, drag: W.drag, height: (x, z) => groundAt(x, z), pad: new THREE.Vector3(0, 0, 0), solids: colliders.filter((c) => c.top !== undefined),
+    g: W.g, drag: W.drag, height: (x, z) => Math.max(groundAt(x, z), waterAt), pad: new THREE.Vector3(0, 0, 0), solids: colliders.filter((c) => c.top !== undefined),
     wind: () => windNow,
   });
   sim.place(-90, at(-90, 140) + 600, 140, 0.3); sim.s.vel.set(10, -40, -14); sim.s.auto = 'descent'; sim.s.wasContact = false;
   const astro = buildAstronaut(); astro.root.visible = false; scene.add(astro.root);
   // the rover rides down with the lander and is set on the ground when you first step out
   const rover = buildRover(); rover.visible = false; scene.add(rover);
-  const rv = createRoverSim({ g: W.g, heightAt: (x, z) => groundAt(x, z), solids: colliders, collide: (p, r, y) => scatter.collide(p, r, y), bound: BOUND });
+  const rv = createRoverSim({ g: W.g, drag: W.drag, heightAt: (x, z) => groundAt(x, z), solids: colliders, query: (p, r, out) => scatter.query(p, r, out), bound: BOUND,
+    water: water ? water.level : null, current: (x, z, out) => (water ? water.current(x, z, out) : out.set(0, 0, 0)), wind: () => windNow });
+  // splashes: thrown up by the wheels and the paddling, falling back into the water
+  const spN = 400, spPos = new Float32Array(spN * 3).fill(-1e5), spVel = new Float32Array(spN * 3); let spI = 0;
+  const spGeo = new THREE.BufferGeometry(); spGeo.setAttribute('position', new THREE.BufferAttribute(spPos, 3));
+  const splash = new THREE.Points(spGeo, new THREE.PointsMaterial({ size: 0.35, map: softDot(), color: 0xe8e4d8, transparent: true, opacity: 0.7, depthWrite: false })); splash.frustumCulled = false; scene.add(splash);
+  function spawnSplash(n, x, z, yaw, sp) {
+    for (let k = 0; k < n; k++) { const i = spI++ % spN, side = Math.random() < 0.5 ? -1 : 1, a = yaw + side * (1.2 + Math.random() * 0.6);
+      spPos.set([x + Math.sin(yaw) * (Math.random() * 3 - 1.5) + side * Math.cos(yaw) * 1.3, waterAt + 0.1, z + Math.cos(yaw) * (Math.random() * 3 - 1.5) - side * Math.sin(yaw) * 1.3], i * 3);
+      spVel.set([-Math.sin(a) * sp * (0.3 + Math.random() * 0.4), 1.5 + Math.random() * 2.5 * Math.min(1, sp / 4), -Math.cos(a) * sp * (0.3 + Math.random() * 0.4)], i * 3); }
+  }
+  const wake = { x: 0, z: 0, speed: 0, on: false };
   let roverOut = false;
   const landerSolid = { x: 0, z: 0, r: 2.6 }; // kept at the lander for the rover's collisions
   const seatW = new THREE.Vector3();
@@ -448,7 +468,7 @@ export function createSurface(renderer, key, opts = {}) {
 
   // ---------- day and night ----------
   let day = 1, night = 0;
-  const tmpC = new THREE.Color();
+  const tmpC = new THREE.Color(), tmpC2 = new THREE.Color();
   function applySun() {
     const e = sunDir.y;
     day = ss(-0.08, 0.3, e); night = 1 - ss(-0.2, 0.04, e);
@@ -575,13 +595,25 @@ export function createSurface(renderer, key, opts = {}) {
       for (const l of lander.userData.lights || []) { if (l.kind === 'beacon') l.m.visible = ((t + l.phase) % 1.6) < 0.14; else if (l.kind === 'strobe') l.m.visible = ((t + l.phase) % 1.1) < 0.06; }
       for (let i = 0; i < dustN; i++) { const k = i * 3; if (dustPos[k + 1] < -1e4) continue; dustVel[k + 1] -= g * 0.15 * dt; for (let a = 0; a < 3; a++) { dustVel[k + a] *= 1 - dt * (0.4 + W.dust); dustPos[k + a] += dustVel[k + a] * dt; } if (dustPos[k + 1] < groundAt(dustPos[k], dustPos[k + 2])) { dustVel[k] = dustVel[k + 1] = dustVel[k + 2] = 0; } }
       dustGeo.attributes.position.needsUpdate = true; dust.material.opacity = W.dust > 0 ? 0.35 : 0;
+      if (water) {
+        for (let i = 0; i < spN; i++) { const k = i * 3; if (spPos[k + 1] < -1e4) continue; spVel[k + 1] -= g * dt; spPos[k] += spVel[k] * dt; spPos[k + 1] += spVel[k + 1] * dt; spPos[k + 2] += spVel[k + 2] * dt; if (spPos[k + 1] < waterAt - 0.1) spPos[k + 1] = -1e5; }
+        spGeo.attributes.position.needsUpdate = true;
+        // the wake follows whoever is moving through the water
+        const inWater = (roverOut && (rv.s.float || rv.s.depth > 0.3)) ? rv.s : null;
+        if (inWater) { wake.x = rv.s.pos.x; wake.z = rv.s.pos.z; wake.speed = Math.abs(rv.s.speed); wake.on = true; }
+        else if (st.phase === 'walk' && waterAt - groundAt(st.pos.x, st.pos.z) > 0.3) { wake.x = st.pos.x; wake.z = st.pos.z; wake.speed = Math.hypot(st.vel.x, st.vel.z) * 0.5; wake.on = true; }
+        else wake.on = false;
+        const dz = tmpC.set(S.nightZen).lerp(tmpC2.set(S.dayZen), day);
+        water.update(t, sunDir, sun.color, Math.max(0.15, S.sunI * ss(-0.03, 0.12, sunDir.y) / 2.5), day, dz, scene.fog.color, wake);
+      }
 
       // ---- the rover ----
       if (roverOut) {
         const driving = st.phase === 'drive';
         landerSolid.x = L.pos.x; landerSolid.z = L.pos.z; if (!colliders.includes(landerSolid)) colliders.push(landerSolid);
         rv.update(dt, driving ? { fwd: input.fwd, turn: THREE.MathUtils.clamp(input.turn + input.strafe, -1, 1), brake: input.jump, boost: input.run } : { fwd: 0, turn: 0, brake: true, boost: false });
-        poseRover(rover, rv.s, night, t);
+        poseRover(rover, rv.s, rv.groundAt, night, t, dt);
+        if (rv.s.splash > 0.3 && Math.random() < Math.min(1, rv.s.splash * 0.5)) spawnSplash(Math.ceil(rv.s.splash), rv.s.pos.x, rv.s.pos.z, rv.s.yaw, Math.abs(rv.s.speed) + 1);
         for (const l of rover.userData.lights || []) if (l.kind === 'beacon') l.m.visible = ((t + l.phase) % 1.6) < 0.14;
         if (driving) { // the astronaut sits in the driver's seat
           seatW.copy(SEAT).applyQuaternion(rover.quaternion).add(rover.position);
@@ -598,7 +630,8 @@ export function createSurface(renderer, key, opts = {}) {
         const moving = mv.lengthSq() > 0; if (moving) mv.normalize();
         // uphill is slower, downhill a little faster
         let grade = 0; if (moving) grade = (groundAt(st.pos.x + mv.x * 0.6, st.pos.z + mv.z * 0.6) - groundAt(st.pos.x, st.pos.z)) / 0.6;
-        const top = (input.run ? 5.4 : 2.1) * THREE.MathUtils.clamp(1 - grade * 1.1, 0.25, 1.25);
+        const wdepth = waterAt - groundAt(st.pos.x, st.pos.z), swim = wdepth > 1.35;
+        const top = (input.run ? 5.4 : 2.1) * THREE.MathUtils.clamp(1 - grade * 1.1, 0.25, 1.25) * (swim ? 0.45 : wdepth > 0.2 ? 1 - Math.min(0.6, wdepth * 0.45) : 1);
         if (moving) st.yaw = Math.atan2(-mv.x, -mv.z);
         // grip depends on gravity: low gravity means less traction, so you slide and drift
         const grip = st.onGround ? THREE.MathUtils.clamp(W.g * 9, 1.6, 10) : 0.4;
@@ -612,7 +645,12 @@ export function createSurface(renderer, key, opts = {}) {
         for (const c of [...colliders, { x: L.pos.x, z: L.pos.z, r: 2.4 }, ...(roverOut ? [{ x: rv.s.pos.x, z: rv.s.pos.z, r: 1.6 }] : [])]) { if (c.top !== undefined && st.pos.y > c.top) continue; const dx = st.pos.x - c.x, dz = st.pos.z - c.z, d = Math.hypot(dx, dz); if (d < c.r + 0.35 && !(c.wall && d < c.r - 4)) { const s = (c.r + 0.35) / Math.max(d, 1e-3); st.pos.x = c.x + dx * s; st.pos.z = c.z + dz * s; } }
         scatter.collide(st.pos, 0.35, st.pos.y);
         st.pos.x = THREE.MathUtils.clamp(st.pos.x, -BOUND, BOUND); st.pos.z = THREE.MathUtils.clamp(st.pos.z, -BOUND, BOUND);
-        const gy = groundAt(st.pos.x, st.pos.z);
+        if (swim) { // afloat: head above the water, carried a little by the current
+          const c = water.current(st.pos.x, st.pos.z, new THREE.Vector3()); st.pos.x += c.x * dt * 0.8; st.pos.z += c.z * dt * 0.8;
+          st.pos.y = waterAt - 1.25 + Math.sin(t * 2) * 0.04; st.vel.y = 0; st.onGround = true;
+        }
+        if (wdepth > 0.2 && (st.vel.x * st.vel.x + st.vel.z * st.vel.z) > 1 && Math.random() < 0.3) spawnSplash(1, st.pos.x, st.pos.z, st.yaw, 1.2);
+        const gy = swim ? st.pos.y : groundAt(st.pos.x, st.pos.z);
         if (st.pos.y <= gy) { if (!st.onGround && st.vel.y < -4) st.land = 0.25; st.pos.y = gy; st.vel.y = 0; st.onGround = true; } else if (st.pos.y > gy + 0.06) st.onGround = false;
         astro.root.position.copy(st.pos); astro.root.rotation.x = astro.root.rotation.z = 0;
         astro.root.rotation.y += wrapAngle(st.yaw - astro.root.rotation.y) * (1 - Math.exp(-dt * 10));
@@ -649,7 +687,7 @@ export function createSurface(renderer, key, opts = {}) {
       st.roverFar = st.phase === 'walk' && (!roverOut || st.pos.distanceTo(rv.s.pos) > 30);
     },
     dispose() {
-      terrain.dispose(); scatter.dispose(); covers.forEach((c) => c.dispose()); pool.dispose();
+      terrain.dispose(); scatter.dispose(); covers.forEach((c) => c.dispose()); pool.dispose(); if (water) water.dispose();
       scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
       if (envTex) envTex.dispose(); pm.dispose(); renderer.toneMappingExposure = 1.0;
     },
