@@ -118,7 +118,7 @@ ${NOISE}
 float h11(vec3 p){ return fract(sin(dot(p, vec3(12.9898,78.233,37.719)))*43758.5453); }
 void main(){
   vec3 d = normalize(vDir); float y = d.y; vec3 s = normalize(uSun);
-  float day = smoothstep(-0.05, 0.25, s.y), set = smoothstep(-0.16, 0.0, s.y)*(1.0 - smoothstep(0.03, 0.32, s.y));
+  float day = smoothstep(-0.08, 0.3, s.y), set = smoothstep(-0.2, 0.0, s.y)*(1.0 - smoothstep(0.06, 0.42, s.y));
   vec3 zen = mix(uNZ, uDZ, day), hor = mix(uNH, uDH, day);
   float toward = pow(max(dot(normalize(d.xz + 1e-4), normalize(s.xz + 1e-4)), 0.0), 2.0);
   hor = mix(hor, uSH, set*(0.3 + 0.7*toward));
@@ -444,8 +444,8 @@ export function createSurface(renderer, key, opts = {}) {
   const tmpC = new THREE.Color();
   function applySun() {
     const e = sunDir.y;
-    day = ss(-0.05, 0.25, e); night = 1 - ss(-0.16, 0.04, e);
-    const setK = ss(-0.16, 0.0, e) * (1 - ss(0.03, 0.32, e));
+    day = ss(-0.08, 0.3, e); night = 1 - ss(-0.2, 0.04, e);
+    const setK = ss(-0.2, 0.0, e) * (1 - ss(0.06, 0.42, e));
     skyU.uSun.value.copy(sunDir);
     sun.intensity = S.sunI * ss(-0.03, 0.12, e);
     sun.color.setRGB(...S.sunCol).lerp(tmpC.setRGB(1.0, 0.55, 0.28), 1 - ss(0.0, 0.3, e));
