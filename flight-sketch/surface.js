@@ -501,7 +501,7 @@ export function createSurface(renderer, key, opts = {}) {
   const seatW = new THREE.Vector3();
 
   const st = {
-    phase: 'descent', t: 0, pos: new THREE.Vector3(), vel: new THREE.Vector3(), yaw: 0, camYaw: 0.6, camPitch: 0.22, camDist: 22, camOff: 0, walk: 0, onGround: true,
+    phase: 'descent', t: 0, pos: new THREE.Vector3(), vel: new THREE.Vector3(), yaw: 0, camYaw: 0.6, camPitch: 0.22, camDist: 22, camOff: 0, walk: 0, onGround: true, view: 'third',
     poi: null, msg: '', done: false, lander: sim.s,
   };
 
@@ -550,6 +550,12 @@ export function createSurface(renderer, key, opts = {}) {
   })();
   const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
   let camYawS = null;
+  // first person: the astronaut's body is hidden (its helmet lamps stay lit), the eye sits in the helmet,
+  // in the rover's driving seat, or at the lander's front window (the lander itself is hidden then)
+  let bodyShown = true;
+  function showBody(v) { if (v === bodyShown) return; bodyShown = v; astro.root.traverse((o) => { if (o.isMesh) o.visible = v; }); }
+  const EYE_WALK = 1.62, EYE_SEAT = new THREE.Vector3(-0.42, 2.0, 0.08), EYE_LANDER = new THREE.Vector3(0, 3.3, -2.0);
+  const _eye = new THREE.Vector3(), _look = new THREE.Vector3(), _q = new THREE.Quaternion();
 
   return {
     scene, camera, key, W, pois, st,
@@ -575,6 +581,8 @@ export function createSurface(renderer, key, opts = {}) {
     get loading() { return !isReady ? 1 : terrain.busy + scatter.busy; },
     // back to the lander from wherever you have walked (the way off the planet is from its cabin)
     get roverOut() { return roverOut; },
+    // first or third person
+    setView(v) { st.view = v === undefined ? (st.view === 'first' ? 'third' : 'first') : v; if (st.view === 'first') { st.camPitch = 0.22; st.camOff = 0; } else if (st.camDist < 4) st.camDist = st.phase === 'walk' ? 7 : st.phase === 'drive' ? 12 : 22; return st.view; },
     // what the ears need, for the planet's soundscape: where you are, the light, the wind, the water, the rover
     listen() {
       const p = st.phase === 'walk' ? st.pos : st.phase === 'drive' ? rv.s.pos : sim.s.pos;
@@ -721,10 +729,32 @@ export function createSurface(renderer, key, opts = {}) {
         const want = L.yaw + st.camOff; camYawS = camYawS === null ? want : camYawS + wrapAngle(want - camYawS) * (1 - Math.exp(-dt * 3));
         yaw = camYawS; dist = st.camDist * (1 + Math.min(0.5, Math.hypot(L.vel.x, L.vel.z) / 60)); st.camYaw = yaw;
       } else { if (!input.dragging) st.camYaw += dt * 0.12; yaw = st.camYaw; dist = st.phase === 'descent' ? 30 : 26; camYawS = null; }
-      const off = new THREE.Vector3(Math.sin(yaw) * Math.cos(st.camPitch), Math.sin(st.camPitch), Math.cos(yaw) * Math.cos(st.camPitch)).multiplyScalar(dist);
-      camera.position.copy(focus).add(off);
-      const minY = groundAt(camera.position.x, camera.position.z) + 0.8; if (camera.position.y < minY) camera.position.y = minY;
-      camera.lookAt(focus);
+      const fpp = st.view === 'first' && (st.phase === 'walk' || st.phase === 'drive' || st.phase === 'pilot');
+      showBody(!fpp); lander.visible = !(fpp && st.phase === 'pilot');
+      if (fpp) {
+        const lp = st.camPitch - 0.22; // level when the pitch is at its default
+        if (st.phase === 'walk') { // in the helmet, with a little bob as you walk
+          const bob = st.onGround ? Math.sin(st.walk * 2) * Math.min(0.035, Math.hypot(st.vel.x, st.vel.z) * 0.008) : 0;
+          camera.position.set(st.pos.x, st.pos.y + EYE_WALK + bob, st.pos.z);
+          if (waterAt - groundAt(st.pos.x, st.pos.z) > 1.35) camera.position.y = Math.max(camera.position.y, waterAt + 0.25);
+          _look.set(-Math.sin(st.camYaw) * Math.cos(lp), -Math.sin(lp), -Math.cos(st.camYaw) * Math.cos(lp)).add(camera.position);
+          camera.up.set(0, 1, 0); camera.lookAt(_look);
+        } else { // fixed to the vehicle: it tilts and bumps with it; drag to look round
+          const obj = st.phase === 'drive' ? rover : lander;
+          if (!input.dragging) st.camOff *= Math.exp(-dt * 0.6);
+          obj.updateMatrixWorld(); obj.getWorldQuaternion(_q);
+          camera.position.copy(st.phase === 'drive' ? EYE_SEAT : EYE_LANDER).applyQuaternion(_q).add(obj.getWorldPosition(_eye));
+          const ly = st.camOff, lpp = st.phase === 'pilot' ? lp + 0.25 : lp; // in the lander look a little down, to see the ground
+          _look.set(-Math.sin(ly) * Math.cos(lpp), -Math.sin(lpp), -Math.cos(ly) * Math.cos(lpp)).applyQuaternion(_q).add(camera.position);
+          camera.up.set(0, 1, 0).applyQuaternion(_q); camera.lookAt(_look);
+        }
+        const minY = groundAt(camera.position.x, camera.position.z) + 0.3; if (camera.position.y < minY) camera.position.y = minY;
+      } else {
+        const off = new THREE.Vector3(Math.sin(yaw) * Math.cos(st.camPitch), Math.sin(st.camPitch), Math.cos(yaw) * Math.cos(st.camPitch)).multiplyScalar(dist);
+        camera.position.copy(focus).add(off);
+        const minY = groundAt(camera.position.x, camera.position.z) + 0.8; if (camera.position.y < minY) camera.position.y = minY;
+        camera.up.set(0, 1, 0); camera.lookAt(focus);
+      }
       sky.position.copy(camera.position);
       sun.position.copy(focus).addScaledVector(sunDir.y > 0 ? sunDir : new THREE.Vector3(sunDir.x, 0.05, sunDir.z).normalize(), 400); sun.target.position.copy(focus);
       // stream the land, the plants and the rocks around you

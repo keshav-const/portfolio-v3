@@ -136,12 +136,17 @@ What changed to make it smooth:
 - Journeys: about 30 s at Cruise, 9 s Fast, 1.6 s Warp. Arrival leads into a slow orbit.
 - Luna: the lit side grows with the song's progress (a demo timer, no Spotify connection); the ring shows journey progress.
 - Synthesised cabin sound, starting when you board.
-- Each surface has its own soundscape (ambience.js), synthesised with Web Audio, with no recordings. Wind comes in random gusts. Layers get louder as you near their source, and some pan toward it.
-  - **Technova:** a thin, high wind with a faint whistle off the rock edges; grit blowing over the basalt; stones tumbling now and then. Near the installations: a low rumble of plant, mains hum, venting, and the mast's buzz and blips.
-  - **Ekatva:** leaves and grass; the river, louder as you near it and panned toward it; birds by day; insects and croaks by night; the Fort's bell; a drone from the Amphitheatre.
+- Each surface has its own soundscape (ambience.js), synthesised with Web Audio, with no recordings. Wind comes in random gusts. Apart from birds, nothing is struck or pitched: the worlds are made of air, grit and water.
+  - **Technova:** a dry, high wind with its low weight under it; grit skating over the basalt; gravel slipping on slopes. Near the installations: the rumble of plant and its venting.
+  - **Ekatva:** leaves and grass; the river, louder as you near it and panned toward it, with spray at the fords; birds by day; insects and croaks by night.
   - **The Arena:** wind through the grass; crowds from the grounds; cheers, sometimes after the crack of a bat; the stands clapping in time; larks by day; crickets and floodlight hum at night.
-  - **Cosmos:** next to no air, so mostly your suit: its fan and your breathing. Also a faint wisp of wind, the ground through your boots, ice singing in falling whistles, crystals ticking, and the Observatory's servos.
+  - **Cosmos:** mostly your suit, its fan and your breathing. Also a wisp of thin wind, frost fizzing in the sun, ice settling in long low swells, and the Observatory's servos.
   - **The rover:** motor whine that rises with speed, wheel crunch, and splashing in water.
+- **First or third person (C):** on foot, in the rover and in the lander. Scrolling all the way in also switches to first person, and scrolling out switches back. On touch screens a "1st person / 3rd person" chip does the same.
+  - On foot you see through the helmet, with a slight bob as you walk.
+  - In the rover you sit in the driver's seat behind the console.
+  - In the lander you look out of the front window, tipped down toward the ground.
+- Time keeps running while you are away. A browser stops drawing a tab you are not looking at; on your return, the planets, their spin and the sun move on by the real time that passed. Only the system moves on; you are not.
 - The planets orbit the star on tilted orbits (4° to 17°), each with its own year, and turn on tilted axes. Sunrise to sunrise takes 20 minutes on Technova, 30 on Ekatva, 40 on The Arena and 25 on Cosmos. Years run from one to two hours. Day and night on a surface come from that: you land under the vessel, so you arrive in the local time there, and the sun moves across the sky as the planet turns.
 - Planets differ in size, shape (oval Technova with a moon, flattened Arena, ringed Cosmos), gravity (0.24 g to 1.08 g), air and wind.
 - The star stands for you: granulation, spots, prominences and a corona, with an "about you" card (placeholders) while you orbit it. Too hot to land.

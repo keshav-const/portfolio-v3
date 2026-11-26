@@ -3,15 +3,15 @@
 // events (calls, clanks, cheers, ice singing) scheduled at random. Audio runs off the main thread; the game only
 // sets a few levels ten times a second, so this costs next to nothing per frame. Throwaway sketch code.
 //
-//   Technova  thin air: a high, papery wind in gusts with a whistle off the rock edges, grit blowing over basalt,
-//             stones tumbling now and then; near the installations a low rumble of plant, mains hum, venting,
-//             and the mast's buzz and telemetry
-//   Ekatva    leaves and grass in the wind, the river, strange birds by day, insects and croaks by night,
-//             the bell of the Fort and a drone from the Amphitheatre
+//   Technova  thin air over bare basalt: a dry, high wind in gusts with its low weight under it, grit skating over
+//             the rock, gravel slipping on slopes; near the installations the rumble of plant and its venting
+//   Ekatva    leaves and grass in the wind, the river (and spray at the fords), birds by day, insects and croaks
+//             by night
 //   The Arena wind through grass, crowds from the grounds, cheers and the crack of a bat, the stands clapping
 //             in time, larks by day, crickets and floodlight hum at night
-//   Cosmos    next to no air, so mostly your suit: its fan, your breathing; a faint wisp of thin wind, the ground
-//             through your boots, ice singing in falling whistles, crystals ticking, the Observatory's servos
+//   Cosmos    next to no air, so mostly your suit: its fan, your breathing; a wisp of thin wind, frost fizzing in
+//             the sun, ice settling in long low swells, grains sliding, the Observatory's servos
+// Nothing here is a struck or pitched sound except the birds: the worlds are made of air, grit and water.
 
 const NOISE = new WeakMap();
 function noiseBuffers(ctx) {
@@ -90,28 +90,25 @@ export function createAmbience(ctx, out, key) {
   // and a faint narrow whistle where it catches on rock edges
   function wind(centre, q, whistleAt) {
     const f = filt('bandpass', centre, q), body = layer([loop(white), f], 0.12);
-    const wf = filt('bandpass', whistleAt, 14), whistle = layer([loop(white), wf], 0.2);
-    return { set(level, g, t) { body.set(level * (0.25 + 0.75 * g), 0.6); f.frequency.setTargetAtTime(centre * (0.75 + 0.5 * g), t, 0.8); whistle.set(level * 0.5 * g * g, 0.8); wf.frequency.setTargetAtTime(whistleAt * (0.85 + 0.35 * g), t, 1.2); } };
-  }
-  // stones tumbling somewhere nearby: small bright clicks, quicker and quieter as they settle
-  function pebbles(peak, lo, hi) {
-    const n = 3 + Math.floor(Math.random() * 6), pv = rnd(-0.9, 0.9); let t = ctx.currentTime, a = peak, gap = rnd(0.07, 0.16);
-    for (let k = 0; k < n; k++) { burst({ t, dur: 0.003, peak: a, decay: 0.03, filters: [filt('bandpass', rnd(lo, hi), 1.5)], panV: pv, send: 0.25 }); t += gap; gap *= rnd(0.65, 0.9); a *= rnd(0.6, 0.85); }
+    const wf = filt('bandpass', whistleAt, 5), whistle = layer([loop(white), wf], 0.2);
+    return { set(level, g, t) { body.set(level * (0.25 + 0.75 * g), 0.6); f.frequency.setTargetAtTime(centre * (0.75 + 0.5 * g), t, 0.8); whistle.set(level * 0.3 * g * g, 0.8); wf.frequency.setTargetAtTime(whistleAt * (0.85 + 0.35 * g), t, 1.2); } };
   }
   const W = {};
+  // a slide of gravel or a trickle of sand somewhere near: a soft rush of grains that swells and fades, never a hit
+  function trickle(peak, len, fc) {
+    const t = ctx.currentTime, src = ctx.createBufferSource(); src.buffer = Math.random() < 0.5 ? crackle : white;
+    const f = filt('bandpass', fc, 0.8), lp = filt('lowpass', fc * 2, 0.5), v = voice(bus, rnd(-0.9, 0.9), 0.35);
+    v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(peak, t + len * 0.3); v.gain.linearRampToValueAtTime(peak * 0.4, t + len * 0.6); v.gain.linearRampToValueAtTime(0, t + len);
+    chain(src, f, lp, v); src.start(t, Math.random() * 3); src.stop(t + len + 0.1);
+  }
   if (key === 'technova') {
-    // thin air: a high, papery wind, grit blowing over basalt, and far off the installations working
-    W.wind = wind(2600, 0.8, 1100);
+    // thin air over bare basalt: a dry, high wind in gusts, grit skating over the rock, gravel slipping on the
+    // slopes; near the installations the low rumble of plant and the breath of its vents (all noise, no tones)
+    W.wind = wind(2400, 0.7, 900);
+    W.low = layer([loop(brown), filt('bandpass', 260, 0.6)], 0.15); // the wind's weight, felt more than heard
     W.grit = layer([loop(crackle), filt('highpass', 2500, 0.7)], 0.1);
-    W.machines = layer([loop(brown), filt('lowpass', 140, 0.7)], 0.3); // a distant rumble of plant, not a tone
-    const hum = osc('sine', 50), hum2 = osc('sine', 100), hm = gain(1); hum.connect(hm); hum2.connect(hm);
-    W.hum = layer([hm, filt('lowpass', 160, 0.7)], 0.1);
-    const b = osc('sawtooth', 100); W.buzz = layer([b, filt('bandpass', 1200, 3), filt('highpass', 600, 0.7)], 0.05); // electrical, at the mast
-    every(6, 16, () => pebbles(0.35, 2500, 5500));
-    every(2.5, 4, (i) => { // the mast's telemetry blips
-      const p = near(i.near['Antenna mast'] ?? 1e9, 50); if (p < 0.03) return;
-      for (let k = 0; k < 3; k++) tone({ f: 1760, t: ctx.currentTime + k * 0.11, dur: 0.06, peak: 0.02 * p, send: 0.3 });
-    });
+    W.machines = layer([loop(brown), filt('lowpass', 140, 0.7)], 0.3);
+    every(7, 18, () => trickle(rnd(0.02, 0.05), rnd(1.2, 2.8), rnd(1800, 3500)));
     every(9, 22, (i) => { // a long breath of venting from the plant, when you are near it
       const p = Math.max(near(i.near['The Foundry'] ?? 1e9, 200), near(i.near['The Workshop'] ?? 1e9, 100)); if (p < 0.05) return;
       const t = ctx.currentTime, s2 = ctx.createBufferSource(); s2.buffer = white; const f = filt('bandpass', 1800, 0.7), v = voice(bus, rnd(-0.5, 0.5), 0.4);
@@ -126,21 +123,15 @@ export function createAmbience(ctx, out, key) {
     W.river = layer([rm], 0.2);
     const ins = osc('sine', 4300), am = gain(0), am2 = gain(0); wobble(am.gain, 27, 0.5, 'square'); am.gain.value = 0.5; wobble(am2.gain, 0.8, 0.5, 'square'); am2.gain.value = 0.5;
     chain(ins, am, am2); W.insects = layer([am2], 0.2);
-    const a1 = osc('sawtooth', 130.8), a2 = osc('sawtooth', 196), a3 = osc('sawtooth', 261.6), amix = gain(1); for (const o of [a1, a2, a3]) o.connect(amix);
-    a2.detune.value = 4; a3.detune.value = -5;
-    W.drone = layer([amix, filt('lowpass', 800, 0.8)], 0.5);
     every(1.5, 6, (i) => { // birds by day: quick falling notes with a warble, in phrases
       if (i.day < 0.2) return; const n = 2 + Math.floor(Math.random() * 4), f = rnd(1800, 3400), pv = rnd(-0.9, 0.9);
       for (let k = 0; k < n; k++) { const t = ctx.currentTime + k * rnd(0.11, 0.2); tone({ f: f * (k % 2 ? 1.25 : 1.4), to: f * 0.72, t, dur: rnd(0.08, 0.16), peak: 0.035 * i.day, fm: f * 0.04, fmRate: rnd(35, 70), panV: pv, send: 0.35 }); }
     });
-    every(2, 6, (i) => { // croaks from the banks at night
-      if (i.night < 0.4 || i.river > 160) return; const p = near(i.river, 60) * i.night, f = rnd(100, 160), pv = rnd(-0.7, 0.7);
-      for (let k = 0; k < 3; k++) tone({ type: 'sawtooth', f, to: f * 0.85, t: ctx.currentTime + k * 0.09, dur: 0.07, peak: 0.07 * p, filter: filt('bandpass', 620, 4), panV: pv, send: 0.3 });
+    every(2, 6, (i) => { // croaks from the banks at night: rough bursts of breath, not notes
+      if (i.night < 0.4 || i.river > 160) return; const p = near(i.river, 60) * i.night, pv = rnd(-0.7, 0.7), fc = rnd(380, 600);
+      for (let k = 0; k < 3; k++) burst({ t: ctx.currentTime + k * 0.11, dur: 0.05, peak: 0.12 * p, decay: 0.06, attack: 0.012, filters: [filt('bandpass', fc, 3)], buf: crackle, panV: pv, send: 0.3 });
     });
-    every(24, 45, (i) => { // the bell of the Fort
-      const p = near(i.near['The Fort'] ?? 1e9, 250); if (p < 0.03) return;
-      [1, 2, 2.4, 3, 4.2, 5.4].forEach((k, j) => tone({ f: 196 * k, dur: 5 - j * 0.6, peak: (0.06 / (1 + j * 0.7)) * p, attack: 0.004, send: 0.6, panV: 0 }));
-    });
+    W.water2 = layer([loop(white), filt('highpass', 2500, 0.7), filt('lowpass', 6000, 0.7)], 0.2); // fine spray where the river runs over the fords
   } else if (key === 'arena') {
     W.wind = wind(1600, 0.6, 700);
     W.grass = layer([loop(white), filt('bandpass', 3800, 0.9)], 0.05);
@@ -171,21 +162,22 @@ export function createAmbience(ctx, out, key) {
       tone({ f, to: f * 1.1, dur: rnd(0.5, 1.0), peak: 0.02 * i.day, fm: 600, fmRate: rnd(18, 30), panV: pv, send: 0.3 });
     });
   } else if (key === 'cosmos') {
-    // next to no air: what you hear is mostly your suit. Its fan, your breath, a faint wisp of thin wind,
-    // and the ice, whose sounds come up through your boots as high, falling whistles
-    W.fan = layer([loop(brown), filt('lowpass', 900, 0.5)], 0);
-    const f1 = osc('sine', 182), f2 = osc('sine', 364), fm2 = gain(1); f1.connect(fm2); f2.connect(fm2); W.fanTone = layer([fm2], 0);
+    // next to no air, so the world reaches you through your suit and your boots: the suit's fan and your breath,
+    // a wisp of thin wind, frost fizzing as the sun touches it, and the ice settling in long low groans
+    W.fan = layer([loop(brown), filt('lowpass', 700, 0.5)], 0);
+    W.fanHi = layer([loop(white), filt('bandpass', 2200, 0.5)], 0);
     W.wisp = layer([loop(white), filt('highpass', 4000, 0.7)], 0.3);
+    W.frost = layer([loop(crackle), filt('highpass', 5000, 0.7)], 0.2);
     W.ground = layer([loop(brown), filt('lowpass', 60, 0.7)], 0.1);
-    const sv = loop(white), svF = filt('bandpass', 700, 4); W.servo = layer([sv, svF], 0.3); wobble(svF.frequency, 0.2, 250);
-    every(9, 25, () => { // ice singing: a falling whistle, its echoes trailing off across the plain
-      const f = rnd(2800, 5600), to = rnd(250, 500), d = rnd(0.6, 1.4), pv = rnd(-0.9, 0.9);
-      for (let k = 0; k < 3; k++) tone({ f: f * (1 - k * 0.02), to: to * (1 - k * 0.02), t: ctx.currentTime + k * rnd(0.15, 0.3), dur: d, peak: 0.022 / (1 + k * 1.5), attack: 0.004, panV: pv * (1 - k * 0.5), send: 0.8 });
+    const sv = loop(white), svF = filt('bandpass', 700, 2); W.servo = layer([sv, svF], 0.3); wobble(svF.frequency, 0.2, 200);
+    every(12, 30, () => { // the ice settling: a slow, deep swell under your feet
+      const t = ctx.currentTime, len = rnd(2.5, 5), src = ctx.createBufferSource(); src.buffer = brown;
+      const f = filt('lowpass', rnd(90, 160), 1.2), v = voice(bus, rnd(-0.4, 0.4), 0.5);
+      f.frequency.setValueAtTime(rnd(120, 180), t); f.frequency.linearRampToValueAtTime(rnd(60, 90), t + len);
+      v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(0.12, t + len * 0.4); v.gain.linearRampToValueAtTime(0, t + len);
+      chain(src, f, v); src.start(t, Math.random() * 3); src.stop(t + len + 0.1);
     });
-    every(7, 16, () => { // crystals ticking as they cool
-      const n = 3 + Math.floor(Math.random() * 5), pv = rnd(-0.8, 0.8);
-      for (let k = 0; k < n; k++) tone({ f: rnd(3000, 6000), t: ctx.currentTime + k * rnd(0.08, 0.25), dur: 0.25, peak: 0.01, attack: 0.002, panV: pv + rnd(-0.2, 0.2), send: 0.6 });
-    });
+    every(10, 24, () => trickle(0.012, rnd(1.5, 3), rnd(3500, 6000))); // ice grains sliding
     every(4.4, 4.8, (i) => { // breathing in the helmet: in through the nose (brighter), out (lower, longer)
       if (i.phase !== 'walk') return; const t = ctx.currentTime;
       for (const [t0, len, fc, pk] of [[0, 1.3, 1400, 0.018], [1.6, 1.9, 650, 0.024]]) {
@@ -220,14 +212,13 @@ export function createAmbience(ctx, out, key) {
       const wk = i.windK * gust;
       if (key === 'technova') {
         const fo = near(i.near['The Foundry'] ?? 1e9, 300), wo = near(i.near['The Workshop'] ?? 1e9, 150);
-        W.wind.set(0.05, gust, t); W.grit.set(0.05 * gust * gust);
-        W.machines.set(0.02 + 0.12 * fo + 0.06 * wo); W.hum.set(0.012 * Math.max(fo, wo));
-        W.buzz.set(0.012 * near(i.near['Antenna mast'] ?? 1e9, 40));
+        W.wind.set(0.05, gust, t); W.low.set(0.04 * gust); W.grit.set(0.04 * gust * gust);
+        W.machines.set(0.015 + 0.12 * fo + 0.06 * wo);
       } else if (key === 'ekatva') {
         W.leaves.set(0.09 * wk * (0.5 + 0.5 * i.day) + 0.012); W.grass.set(0.03 * wk);
         W.river.set(0.03 + 0.28 * near(i.river, 45)); W.river.pan(panOf(i, i.riverX, i.z));
         W.insects.set(0.022 * i.night);
-        const am = i.pois.find((o) => o.name === 'The Amphitheatre'); W.drone.set(0.04 * near(i.near['The Amphitheatre'] ?? 1e9, 160)); if (am) W.drone.pan(panOf(i, am.x, am.z));
+        const ford = Math.min(...['The ford', 'The upper ford', 'The lower ford'].map((n) => i.near[n] ?? 1e9)); W.water2.set(0.05 * near(ford, 40) * near(i.river, 40)); W.water2.pan(panOf(i, i.riverX, i.z));
       } else if (key === 'arena') {
         W.wind.set(0.08 * i.windK, gust, t); W.grass.set(0.04 * wk);
         const ga = i.near['The Grand Arena'] ?? 1e9, gr = i.near['The Ground'] ?? 1e9;
@@ -237,7 +228,7 @@ export function createAmbience(ctx, out, key) {
         W.crickets.set(0.02 * i.night);
       } else if (key === 'cosmos') {
         const suit = i.phase === 'walk' ? 1 : 0.35; // in the lander or the rover the cabin covers the suit
-        W.fan.set(0.03 * suit); W.fanTone.set(0.002 * suit); W.wisp.set(0.006);
+        W.fan.set(0.03 * suit); W.fanHi.set(0.005 * suit); W.wisp.set(0.006); W.frost.set(0.006 * i.day);
         W.ground.set(drv ? 0.05 : 0.012);
         W.servo.set(0.03 * Math.max(near(i.near['The Observatory'] ?? 1e9, 80), near(i.near['The Great Telescope'] ?? 1e9, 160), near(i.near['The Array'] ?? 1e9, 80)));
       }

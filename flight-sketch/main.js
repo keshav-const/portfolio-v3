@@ -342,6 +342,7 @@ addEventListener('keydown', (e) => {
       else if (s.st.phase === 'drive' && !s.drive()) { s.st.lander.msg = 'Slow down to get out'; s.st.lander.msgT = 2; }
     }
     if (e.code === 'KeyF' && !e.repeat) summonRover();
+    if (e.code === 'KeyC' && !e.repeat) s.setView();
     if (e.code === 'KeyT') recallToLander(true);
     if (e.code === 'KeyB') recallToLander(false);
     if (e.code === 'KeyN') cycleSound(); if (e.code === 'KeyL') cycleLuna(); if (e.code === 'KeyM') { WORLD.labels = !WORLD.labels; }
@@ -379,12 +380,15 @@ cv.addEventListener('pointermove', (e) => {
   if (pinch.ptrs.has(e.pointerId)) pinch.ptrs.set(e.pointerId, [e.clientX, e.clientY]);
   if (pinch.ptrs.size === 2) { const d = pinchDist(), k = pinch.d / Math.max(d, 1); pinch.d = d; zoomBy(k); return; }
   if (!drag.on) return;
-  if (WORLD.mode === 'surface') { const st = WORLD.surface.st; if (st.phase === 'pilot') st.camOff -= (e.clientX - drag.lx) * 0.006; else st.camYaw -= (e.clientX - drag.lx) * 0.006; st.camPitch = THREE.MathUtils.clamp(st.camPitch + (e.clientY - drag.ly) * 0.005, -0.3, 1.3); drag.lx = e.clientX; drag.ly = e.clientY; return; }
+  if (WORLD.mode === 'surface') { const st = WORLD.surface.st; if (st.phase === 'pilot' || st.phase === 'drive') st.camOff -= (e.clientX - drag.lx) * 0.006; else st.camYaw -= (e.clientX - drag.lx) * 0.006; st.camPitch = THREE.MathUtils.clamp(st.camPitch + (e.clientY - drag.ly) * 0.005, -0.3, 1.3); drag.lx = e.clientX; drag.ly = e.clientY; return; }
   if (WORLD.mode === 'interior') { const st = WORLD.interior.st; st.yaw -= (e.clientX - drag.lx) * 0.005; st.pitch = THREE.MathUtils.clamp(st.pitch - (e.clientY - drag.ly) * 0.004, -1.2, 1.2); drag.lx = e.clientX; drag.ly = e.clientY; return; }
   if (flight.view === 'inspect') { insp.yaw -= (e.clientX - drag.lx) * 0.006; insp.pitch = THREE.MathUtils.clamp(insp.pitch + (e.clientY - drag.ly) * 0.005, -1.4, 1.4); insp.auto = false; drag.lx = e.clientX; drag.ly = e.clientY; return; }
   drag.dx = THREE.MathUtils.clamp((e.clientX - drag.x) / 160, -1, 1); drag.dy = THREE.MathUtils.clamp((e.clientY - drag.y) / 160, -1, 1);
 });
-cv.addEventListener('wheel', (e) => { if (WORLD.mode === 'surface') { e.preventDefault(); const st = WORLD.surface.st; st.camDist = THREE.MathUtils.clamp(st.camDist * Math.exp(e.deltaY * 0.0012), 2.5, 80); return; } if (flight.view !== 'inspect') return; e.preventDefault(); insp.zoom = THREE.MathUtils.clamp(insp.zoom * Math.exp(e.deltaY * 0.0012), 0.35, 4); }, { passive: false });
+cv.addEventListener('wheel', (e) => { if (WORLD.mode === 'surface') { e.preventDefault(); const s = WORLD.surface, st = s.st; // scroll all the way in for first person, out again for third
+    if (st.view === 'first') { if (e.deltaY > 0) { s.setView('third'); st.camDist = 3; } return; }
+    if (st.camDist <= 2.6 && e.deltaY < 0) { s.setView('first'); return; }
+    st.camDist = THREE.MathUtils.clamp(st.camDist * Math.exp(e.deltaY * 0.0012), 2.5, 80); return; } if (flight.view !== 'inspect') return; e.preventDefault(); insp.zoom = THREE.MathUtils.clamp(insp.zoom * Math.exp(e.deltaY * 0.0012), 0.35, 4); }, { passive: false });
 const lift = (e) => { pinch.ptrs.delete(e.pointerId); endDrag(); };
 cv.addEventListener('pointerup', lift); cv.addEventListener('pointercancel', lift);
 }
@@ -730,9 +734,9 @@ function updateWorldHUD() {
       : st.phase === 'drive' ? `Driving · ${Math.round(Math.abs(rs.speed) * 3.6)} km/h${rs.air ? ' · airborne' : rs.float ? ' · afloat' : rs.depth > 0.25 ? ' · wading' : ''}${st.poi ? ' · ' + st.poi.name : ''}`
       : T ? (st.nearRover ? 'The rover · tap Get in' : st.nearLander ? 'The lander · tap Board' : st.poi ? `You are at ${st.poi.name}` : 'Explore')
       : st.nearRover ? 'E · Drive the rover' : st.nearLander ? 'E · Board the lander' : st.poi ? `You are at ${st.poi.name}` : s.roverOut ? 'Explore · F call the rover · B back to the lander' : 'Explore · B back to the lander · T leave the planet'));
-    setText(worldEls.h, st.phase === 'drive' ? 'W S drive / reverse · A D steer · Shift fast · Space brake · E get out · B lander · drag to look'
-      : st.phase === 'walk' ? 'W A S D walk · Shift run · Space jump · drag to look · scroll to zoom · F rover · B lander · T leave · M labels · P graphics'
-      : st.phase === 'pilot' ? 'W S forward/back · A D turn · ← → sideways · Space up · Shift down · R boost · drag to look · M labels · P graphics' : 'Drag to look around');
+    setText(worldEls.h, st.phase === 'drive' ? 'W S drive / reverse · A D steer · Shift fast · Space brake · E get out · B lander · C first / third person · drag to look'
+      : st.phase === 'walk' ? 'W A S D walk · Shift run · Space jump · drag to look · C first / third person · F rover · B lander · T leave · M labels · P graphics'
+      : st.phase === 'pilot' ? 'W S forward/back · A D turn · ← → sideways · Space up · Shift down · R boost · C first / third person · drag to look · M labels · P graphics' : 'Drag to look around');
     updateSunPanel(el);
     updateActions(st, L);
     const r = document.getElementById('w-read'); r.hidden = st.phase === 'walk' || st.phase === 'drive';
@@ -787,6 +791,7 @@ function updateActions(st, L) {
   actEls.out.hidden = !(pilot && L.landed); actEls.board.hidden = !(walk && st.nearLander && !st.nearRover);
   actEls.drive.hidden = !(walk && st.nearRover); actEls.exit.hidden = !drive; actEls.call.hidden = !(walk && st.roverFar && !st.nearLander);
   actEls.back.hidden = !((walk && !st.nearLander) || drive); actEls.leave.hidden = !(walk || pilot || drive);
+  actEls.view.hidden = !(walk || pilot || drive); setText(actEls.view, st.view === 'first' ? 'Third person · C' : 'First person · C');
 }
 // labels over the places on a surface, with their distance
 const sBox = document.getElementById('s-markers'); const sEls = new Map();
@@ -838,6 +843,14 @@ function advanceSystem(dt) {
   STATION.group.userData.wheel.rotation.z += dt * 0.06;
   blinkLights(STATION.group, clock.value);
 }
+function catchUp(lost) {
+  advanceSystem(lost);
+  if (WORLD.mode !== 'space' || flight.mode === 'docked' || flight.mode === 'undock') return;
+  const t = flight.target;
+  if (t && t.delta && ['orbit', 'travel'].includes(flight.mode)) { ship.pos.add(t.delta); return; }
+  for (const b of BODIES) if (ship.pos.distanceTo(_cu.copy(b.pos).sub(b.delta)) < b.Rmax * 9) { ship.pos.add(b.delta); break; } // flying near a planet: it carries you
+}
+const _cu = new THREE.Vector3();
 function step(dt) {
   advanceSystem(dt);
   const prev = tmpV.copy(ship.pos);
@@ -1151,17 +1164,17 @@ function touchContext() {
   const common = [{ label: 'Sound', code: 'KeyN' }, { label: 'Graphics', code: 'KeyP' }], labels = { label: 'Labels', code: 'KeyM' };
   if (WORLD.mode === 'interior') return { ...none, stick: 'Walk', holds: [{ label: 'Sprint', code: 'ShiftLeft', toggle: true }], actions: [{ label: 'Back to the vessel', code: 'KeyI', primary: true }], more: common };
   if (WORLD.mode === 'surface') {
-    const s = WORLD.surface, st = s.st, L = st.lander, leave = { label: 'Leave the planet', code: 'KeyT' };
+    const s = WORLD.surface, st = s.st, L = st.lander, leave = { label: 'Leave the planet', code: 'KeyT' }, view = { label: st.view === 'first' ? '3rd person' : '1st person', code: 'KeyC' };
     if (st.phase === 'descent') return { ...none, stick: 'Take over', more: [labels, ...common] };
     if (st.phase === 'ascent') return { ...none, more: common };
     if (st.phase === 'pilot') return { ...none, stick: 'Fly', holds: [{ label: 'Up', code: 'Space' }, { label: 'Down', code: 'ShiftLeft' }, { label: 'Boost', code: 'KeyR' }],
-      actions: [L.landed && { label: 'Step out', code: 'KeyE', primary: true }, leave].filter(Boolean), more: [labels, ...common] };
+      actions: [L.landed && { label: 'Step out', code: 'KeyE', primary: true }, view, leave].filter(Boolean), more: [labels, ...common] };
     if (st.phase === 'walk') return { ...none, stick: 'Move', holds: [{ label: 'Jump', code: 'Space' }, { label: 'Sprint', code: 'ShiftLeft', toggle: true }],
       actions: [st.nearRover && { label: 'Get in', code: 'KeyE', primary: true }, st.nearLander && !st.nearRover && { label: 'Board the lander', code: 'KeyE', primary: true },
-        s.roverOut && st.roverFar && { label: 'Call the rover', code: 'KeyF' }, !st.nearLander && { label: 'To the lander', code: 'KeyB' }].filter(Boolean),
+        view, s.roverOut && st.roverFar && { label: 'Call the rover', code: 'KeyF' }, !st.nearLander && { label: 'To the lander', code: 'KeyB' }].filter(Boolean),
       more: [leave, labels, ...common] };
     if (st.phase === 'drive') return { ...none, stick: 'Drive', holds: [{ label: 'Brake', code: 'Space' }, { label: 'Boost', code: 'ShiftLeft', toggle: true }],
-      actions: [{ label: 'Get out', code: 'KeyE', primary: true }, { label: 'To the lander', code: 'KeyB' }], more: [leave, labels, ...common] };
+      actions: [{ label: 'Get out', code: 'KeyE', primary: true }, view, { label: 'To the lander', code: 'KeyB' }], more: [leave, labels, ...common] };
     return none;
   }
   const m = flight.mode;
@@ -1201,6 +1214,10 @@ function frame(now) {
   const raw = now - lastT; lastT = now;
   const dt = THREE.MathUtils.clamp(raw / 1000, 0.001, 0.05) * (+(Q.get('ts') || 1));
   watchFrames(raw, dt);
+  // the system keeps real time: what a frame could not cover (a slow frame, or the minutes spent on another tab,
+  // when the browser stops drawing) moves the planets, their spin and the sun on at once. Your own motion is not
+  // replayed. (Screenshot tests keep the old behaviour unless &catchup.)
+  const lost = raw / 1000 - dt; if (lost > 0.002 && (!Q.has('shot') || Q.has('catchup'))) catchUp(lost);
   const k = (c) => (keys.has(c) ? 1 : 0);
   if (WORLD.mode === 'surface') {
     const s = WORLD.surface; advanceSystem(dt); s.setSun(siteSun());
