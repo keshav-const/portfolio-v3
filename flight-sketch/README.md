@@ -73,7 +73,13 @@ Docking yourself: fly toward the berth on the front of the station. Within 3 km 
 | N | Sound: Vacuum, Ambience, Music (display only), Off |
 | L | Luna: compact, expanded, minimized, hidden |
 
-On a phone or tablet the controls on screen follow what you are doing (touch.js); add `?touch` to see them on a desktop.
+On a phone or tablet, the on-screen controls change with what you are doing (touch.js). They are laid out like a game:
+- **Stick:** put your thumb down anywhere in the lower left and a stick appears under it.
+- **Look:** drag anywhere else to look around; pinch to zoom.
+- **Right thumb:** a big round button and smaller ones around it.
+- **Main action:** what you can do right now (Get in, Get out, Step out, Undock) shows as one large button above them.
+
+The controls switch on with the first touch, including when the desktop browser switches to device emulation after loading. They hide again when a mouse is used. Add `?touch` to force them on, or `?notouch` to turn them off.
 
 | Mode | Stick (left) | Right side | Actions (top right) |
 |---|---|---|---|
@@ -83,9 +89,9 @@ On a phone or tablet the controls on screen follow what you are doing (touch.js)
 | In orbit | — | — | Land, Leave orbit, Mission Control |
 | Inspect | — | — | Next, Zoom + / −, Back to flight (and pinch to zoom) |
 | Lander | fly | Up, Down, Boost held | Step out, Leave the planet |
-| On foot | walk | Jump, Run held | Drive / Board, Call the rover, To the lander |
-| Driving | drive and steer | Brake, Fast held | Get out, To the lander |
-| Inside | walk | — | Back to the vessel |
+| On foot | move | Jump; Sprint (tap to latch) | Get in (rover) / Board the lander, Call the rover, To the lander |
+| Driving | drive and steer | Brake held; Boost (tap to latch) | Get out, To the lander |
+| Inside | walk | Sprint (tap to latch) | Back to the vessel |
 
 One finger on the view looks around (or steers in flight); two fingers pinch to zoom. Tap a marker to set a course;
 the speed levels stay at the top left. The stick is analog.
@@ -130,14 +136,12 @@ What changed to make it smooth:
 - Journeys: about 30 s at Cruise, 9 s Fast, 1.6 s Warp. Arrival leads into a slow orbit.
 - Luna: the lit side grows with the song's progress (a demo timer, no Spotify connection); the ring shows journey progress.
 - Synthesised cabin sound, starting when you board.
-- Each surface has its own soundscape (ambience.js), synthesised with Web Audio, with no recordings. Layers get louder as you near their source, and some pan toward it.
-  - **Technova:** a thin, high hiss of wind; the Foundry's thrum; the mast's buzz and telemetry blips; metal ticking and clanking.
-  - **Ekatva:** leaves and grass in the wind; the river, louder as you near it and panned toward it; birds by day; insects and croaks by night; the Fort's bell; a drone from the Amphitheatre.
-  - **The Arena:** wind through the grass; crowds from the grounds; cheers, sometimes after the crack of a bat; drums from the stands; larks by day; crickets and floodlight hum at night.
-  - **Cosmos:** near silence; your breathing in the suit; the ground's low rumble; ice that sings and cracks; crystals ticking; the Observatory's servos.
+- Each surface has its own soundscape (ambience.js), synthesised with Web Audio, with no recordings. Wind comes in random gusts. Layers get louder as you near their source, and some pan toward it.
+  - **Technova:** a thin, high wind with a faint whistle off the rock edges; grit blowing over the basalt; stones tumbling now and then. Near the installations: a low rumble of plant, mains hum, venting, and the mast's buzz and blips.
+  - **Ekatva:** leaves and grass; the river, louder as you near it and panned toward it; birds by day; insects and croaks by night; the Fort's bell; a drone from the Amphitheatre.
+  - **The Arena:** wind through the grass; crowds from the grounds; cheers, sometimes after the crack of a bat; the stands clapping in time; larks by day; crickets and floodlight hum at night.
+  - **Cosmos:** next to no air, so mostly your suit: its fan and your breathing. Also a faint wisp of wind, the ground through your boots, ice singing in falling whistles, crystals ticking, and the Observatory's servos.
   - **The rover:** motor whine that rises with speed, wheel crunch, and splashing in water.
-  - **Sound modes:** Vacuum plays the soundscape quietly; Off silences it.
-
 - The planets orbit the star on tilted orbits (4° to 17°), each with its own year, and turn on tilted axes. Sunrise to sunrise takes 20 minutes on Technova, 30 on Ekatva, 40 on The Arena and 25 on Cosmos. Years run from one to two hours. Day and night on a surface come from that: you land under the vessel, so you arrive in the local time there, and the sun moves across the sky as the planet turns.
 - Planets differ in size, shape (oval Technova with a moon, flattened Arena, ringed Cosmos), gravity (0.24 g to 1.08 g), air and wind.
 - The star stands for you: granulation, spots, prominences and a corona, with an "about you" card (placeholders) while you orbit it. Too hot to land.

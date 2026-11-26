@@ -723,10 +723,12 @@ function updateWorldHUD() {
     setText(worldEls.t, W.name);
     setText(worldEls.s, `Gravity ${W.g} g · Wind ${W.wind > 0.5 ? 'strong' : W.wind > 0.1 ? 'light' : W.wind > 0 ? 'faint' : 'none, almost no air'} · ${tod}, sun ${el.toFixed(0)}°`);
     const rs = s.rover, msg = st.phase === 'drive' ? (rs.msgT > 0 ? rs.msg : '') : L.msgT > 0 ? L.msg : '';
-    setText(worldEls.p, msg || (st.phase === 'descent' ? 'Descending · any flight key to take over'
+    const T = document.body.classList.contains('touch'); // on a touch screen the prompts name buttons, not keys
+    setText(worldEls.p, msg || (st.phase === 'descent' ? (T ? 'Descending · move the stick to take over' : 'Descending · any flight key to take over')
       : st.phase === 'ascent' ? 'Lifting off to orbit'
-      : st.phase === 'pilot' ? (L.landed ? 'Landed · E step outside · Space lift off · T back to orbit' : L.aglHold <= 0.4 ? 'Settling' : 'Flying · Shift down to land')
+      : st.phase === 'pilot' ? (L.landed ? (T ? 'Landed · step outside, or Up to lift off' : 'Landed · E step outside · Space lift off · T back to orbit') : L.aglHold <= 0.4 ? 'Settling' : (T ? 'Flying · hold Down to land' : 'Flying · Shift down to land'))
       : st.phase === 'drive' ? `Driving · ${Math.round(Math.abs(rs.speed) * 3.6)} km/h${rs.air ? ' · airborne' : rs.float ? ' · afloat' : rs.depth > 0.25 ? ' · wading' : ''}${st.poi ? ' · ' + st.poi.name : ''}`
+      : T ? (st.nearRover ? 'The rover · tap Get in' : st.nearLander ? 'The lander · tap Board' : st.poi ? `You are at ${st.poi.name}` : 'Explore')
       : st.nearRover ? 'E · Drive the rover' : st.nearLander ? 'E · Board the lander' : st.poi ? `You are at ${st.poi.name}` : s.roverOut ? 'Explore · F call the rover · B back to the lander' : 'Explore · B back to the lander · T leave the planet'));
     setText(worldEls.h, st.phase === 'drive' ? 'W S drive / reverse · A D steer · Shift fast · Space brake · E get out · B lander · drag to look'
       : st.phase === 'walk' ? 'W A S D walk · Shift run · Space jump · drag to look · scroll to zoom · F rover · B lander · T leave · M labels · P graphics'
@@ -1147,18 +1149,18 @@ function touchContext() {
   const none = { stick: null, throttle: null, holds: [], actions: [], more: [] };
   if (!document.getElementById('mc').hidden || WORLD.busy) return none;
   const common = [{ label: 'Sound', code: 'KeyN' }, { label: 'Graphics', code: 'KeyP' }], labels = { label: 'Labels', code: 'KeyM' };
-  if (WORLD.mode === 'interior') return { ...none, stick: 'Walk', actions: [{ label: 'Back to the vessel', code: 'KeyI', primary: true }], more: common };
+  if (WORLD.mode === 'interior') return { ...none, stick: 'Walk', holds: [{ label: 'Sprint', code: 'ShiftLeft', toggle: true }], actions: [{ label: 'Back to the vessel', code: 'KeyI', primary: true }], more: common };
   if (WORLD.mode === 'surface') {
     const s = WORLD.surface, st = s.st, L = st.lander, leave = { label: 'Leave the planet', code: 'KeyT' };
     if (st.phase === 'descent') return { ...none, stick: 'Take over', more: [labels, ...common] };
     if (st.phase === 'ascent') return { ...none, more: common };
     if (st.phase === 'pilot') return { ...none, stick: 'Fly', holds: [{ label: 'Up', code: 'Space' }, { label: 'Down', code: 'ShiftLeft' }, { label: 'Boost', code: 'KeyR' }],
       actions: [L.landed && { label: 'Step out', code: 'KeyE', primary: true }, leave].filter(Boolean), more: [labels, ...common] };
-    if (st.phase === 'walk') return { ...none, stick: 'Walk', holds: [{ label: 'Jump', code: 'Space' }, { label: 'Run', code: 'ShiftLeft' }],
-      actions: [st.nearRover && { label: 'Drive', code: 'KeyE', primary: true }, st.nearLander && !st.nearRover && { label: 'Board', code: 'KeyE', primary: true },
+    if (st.phase === 'walk') return { ...none, stick: 'Move', holds: [{ label: 'Jump', code: 'Space' }, { label: 'Sprint', code: 'ShiftLeft', toggle: true }],
+      actions: [st.nearRover && { label: 'Get in', code: 'KeyE', primary: true }, st.nearLander && !st.nearRover && { label: 'Board the lander', code: 'KeyE', primary: true },
         s.roverOut && st.roverFar && { label: 'Call the rover', code: 'KeyF' }, !st.nearLander && { label: 'To the lander', code: 'KeyB' }].filter(Boolean),
       more: [leave, labels, ...common] };
-    if (st.phase === 'drive') return { ...none, stick: 'Drive', holds: [{ label: 'Brake', code: 'Space' }, { label: 'Fast', code: 'ShiftLeft' }],
+    if (st.phase === 'drive') return { ...none, stick: 'Drive', holds: [{ label: 'Brake', code: 'Space' }, { label: 'Boost', code: 'ShiftLeft', toggle: true }],
       actions: [{ label: 'Get out', code: 'KeyE', primary: true }, { label: 'To the lander', code: 'KeyB' }], more: [leave, labels, ...common] };
     return none;
   }
