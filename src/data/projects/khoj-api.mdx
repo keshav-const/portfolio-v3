@@ -1,0 +1,45 @@
+---
+title: 'Khoj API'
+description: "A Go REST API that serves Rasta's knowledge graph, with API-key plans, Redis rate limiting, response caching, and trust and freshness signals."
+technologies: ['Go', 'chi', 'pgx', 'PostgreSQL', 'pg_trgm', 'Upstash Redis', 'Docker', 'GitHub Actions', 'Swagger']
+github: 'https://github.com/keshav-const/rasta-api'
+live: 'https://khoj-ibli.onrender.com/healthz'
+role: 'Solo project'
+status: 'completed'
+featured: true
+isPublished: true
+challenges:
+  - 'Rate limits that differ by plan and stay correct under concurrent requests'
+  - 'Caching responses without serving one plan the data meant for another'
+learnings:
+  - 'One atomic Lua script is simpler and safer than several Redis round trips'
+  - 'Failing open when the limiter is down beats taking the API down with it'
+---
+
+## What it serves
+
+A read-only REST API over the Rasta graph: `/v1/places`, `/v1/places/{slug}`, `/v1/entities`, `/v1/cities` and `/v1/stats`. Every entity comes with computed **trust** and **freshness** objects, so API users can see how well-sourced and how recent each fact is.
+
+## Request path
+
+Every request passes through one middleware chain: request ID, real IP, logging, panic recovery, a 15-second timeout, CORS, API-key authentication (which resolves the caller's plan), the plan-aware rate limiter, and finally the response cache.
+
+## Rate limiting
+
+Each key has a per-minute and a per-day window. Both counters are bumped in **one atomic Redis Lua `EVAL`**, so concurrent requests can't race past the limit. Responses carry `RateLimit-*` and `Retry-After` headers. If Redis is unreachable, the limiter fails open rather than taking the API down.
+
+## Caching
+
+GET responses are cached in Redis for 60 seconds. The cache key includes the plan, so no plan is ever served data meant for another. Responses carry a strong SHA-256 `ETag`, and `If-None-Match` gets a `304 Not Modified`.
+
+## Queries
+
+The SQL is hand-written on a `pgx` connection pool: fuzzy search with `pg_trgm`, haversine radius and bounding-box geo filters, and keyset (cursor) pagination, which stays fast at any depth.
+
+## Operations
+
+- API keys are matched by SHA-256 hash; plain keys are never stored.
+- Per-key daily usage is written off the request path, in a goroutine, as a single upsert.
+- Graceful shutdown on SIGINT and SIGTERM.
+- A multi-stage Docker build produces a static binary in a distroless, non-root image, deployed on Render. Swagger UI is served from the binary.
+- GitHub Actions runs build, `go vet` and the unit tests (auth, cache, store, query validation).

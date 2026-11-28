@@ -1,0 +1,43 @@
+---
+title: 'Taste Concierge'
+description: 'A tool-calling LLM agent that turns your taste in music, film and food into an India itinerary, checked against verified places.'
+technologies: ['TypeScript', 'Next.js', 'React', 'Qloo Taste AI', 'OpenAI', 'Groq', 'Gemini', 'Upstash Redis', 'Tailwind CSS']
+github: 'https://github.com/keshav-const/qloo-taste-concierge'
+live: 'https://qloo-taste-concierge-silk.vercel.app'
+role: 'Solo project'
+status: 'completed'
+featured: true
+isPublished: true
+challenges:
+  - 'Keeping an agent grounded in tool results instead of inventing places'
+  - 'Staying up when model providers rate-limit or fail'
+learnings:
+  - 'A deterministic fallback makes an AI feature feel reliable'
+  - 'Models sometimes write tool calls as plain text, so check for it'
+---
+
+## The idea
+
+Tell it what you listen to, watch and eat, and it plans a trip around India that fits your taste. Every pick is checked against places from the [Rasta](/projects/rasta) graph, so the plan can say how many independent sources back each place.
+
+## The agent
+
+The `/api/plan` route runs a **hand-written tool-calling loop** with a budget of six steps. The tools are written in the OpenAI format:
+
+- `expand_taste`: widens a few tastes into related ones with Qloo's Taste AI
+- `get_verified_places`: finds places that match, from an export of the Rasta graph
+- `check_evidence`: looks up how many sources back a place
+- `qloo_taste_graph` and `cultural_scene`: add cultural context
+
+The system prompt only allows facts that a tool returned.
+
+## Staying up
+
+- **Provider chain.** Calls go to OpenAI first, then Groq, then Gemini. Retry-after hints are parsed, and a rate-limited provider is put on cooldown.
+- **Deterministic fallback.** If every model fails, the route still builds a plan without an LLM, so the page always renders.
+- **Leak guard.** When a model writes a tool call as plain text instead of calling the tool, it's caught and never shown to the user.
+- Errors are mapped to messages that are safe to show users.
+
+## Around the agent
+
+Separate routes handle clarifying questions, refining an itinerary in one call, and swapping a single stop. Share links are short IDs stored in Upstash Redis with a TTL. Place photos come from Wikipedia, fetched in parallel.

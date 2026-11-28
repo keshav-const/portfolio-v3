@@ -1,0 +1,39 @@
+---
+title: 'PromptLens'
+description: 'A Chrome extension that rewrites prompts inside ChatGPT and Gemini, backed by a metered Express API and a usage dashboard.'
+technologies: ['TypeScript', 'Chrome MV3', 'React', 'Vite', 'Express', 'MongoDB', 'Gemini', 'Next.js', 'NextAuth', 'Jest', 'Playwright']
+github: 'https://github.com/keshav-const/promptlens'
+role: 'Solo project'
+status: 'in-progress'
+featured: true
+isPublished: true
+challenges:
+  - 'Metering AI usage fairly per plan'
+  - 'Processing payment webhooks exactly once'
+learnings:
+  - 'Testing against an in-memory database keeps backend tests fast and honest'
+---
+
+## Three parts, one monorepo
+
+PromptLens is an npm-workspaces monorepo:
+
+- **Extension.** A Manifest V3 Chrome extension (React, Vite) adds an "optimize" button to chatgpt.com and gemini.google.com.
+- **API.** An Express and TypeScript service rewrites prompts with Gemini in an *enhanced* or a *concise* mode, and stores history, templates and A/B tests in MongoDB.
+- **Dashboard.** A Next.js app with NextAuth shows usage charts and handles subscriptions.
+
+## Metering and limits
+
+Each plan has a daily quota that resets automatically, enforced in middleware. A general rate limiter and a stricter one sit in front of sensitive routes. Tokens are counted with `gpt-tokenizer`.
+
+## Resilient model calls
+
+The API lists the Gemini models it can use and switches automatically when one is rate-limited, retrying with exponential backoff.
+
+## Payments
+
+Webhooks are verified with an HMAC signature and recorded in an event store that is checked before processing, so a repeated event is never applied twice.
+
+## Tests
+
+About 60 backend tests (Jest and supertest) run against an in-memory MongoDB and cover auth, billing, quotas, usage, history and optimisation. The extension and dashboard have their own Jest tests, plus a Playwright end-to-end spec and a Postman collection.
